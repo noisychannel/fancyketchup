@@ -168,6 +168,10 @@ def sgd_optimization_mnist(learning_rate=0.13, n_epochs=1000,
                             test_score * 100.
                         )
                     )
+                    # Save the best model
+                    with open('best_model.pkl', 'wb') as f:
+                        cPickle.dump(classifier, f)
+
         if patience <= iter:
             done_looping = True
             break
