@@ -63,7 +63,6 @@ class LogisticRegression(object):
         """
         return negative_log_likelihood(self.p_y_given_x, y)
 
-
     def errors(self, y):
         """
         Returns the 0-1 loss over the size of the mini-batch
@@ -80,6 +79,7 @@ class LogisticRegression(object):
             )
         # check if y has the correct datatype
         if y.dtype.startswith('int'):
-            zero_one_loss(self.p_y_given_x, y)
+            return T.mean(T.neq(self.y_pred, y))
+            #return zero_one_loss(self.p_y_given_x, y)
         else:
             raise NotImplementedError()

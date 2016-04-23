@@ -5,19 +5,18 @@ A collection of loss functions for use with Theano
 import theano.tensor as T
 
 
-def zero_one_loss(p_y_given_x, y):
+def zero_one_loss(y_pred, y):
     """
     Implements the Zero-one loss (non-differentiable)
     Returns the average zero-one loss over a batch
 
     Parameters:
-        p_y_given_x : p(y|x, \theta)
-            Expected format : Matrix (rows = x, columns = y)
+        y_pred : The predicted output
         y : The indices of the true labels
             Expected format : Vector
     Returns : The zero one loss for the dataset with true label y
     """
-    return T.mean(T.neq(T.argmax(p_y_given_x), y))
+    return T.mean(T.neq(y_pred, y))
 
 
 def negative_log_likelihood(p_y_given_x, y):

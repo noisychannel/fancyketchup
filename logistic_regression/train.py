@@ -46,8 +46,8 @@ def sgd_optimization_mnist(learning_rate=0.13, n_epochs=1000,
     datasets = load_data(dataset)
 
     train_set_x, train_set_y = datasets[0]
-    valid_set_x, valid_set_y = datasets[0]
-    test_set_x, test_set_y = datasets[0]
+    valid_set_x, valid_set_y = datasets[1]
+    test_set_x, test_set_y = datasets[2]
 
     # Notice that get_value is called with borrow
     # so that a deep copy of the input is not created
@@ -57,7 +57,7 @@ def sgd_optimization_mnist(learning_rate=0.13, n_epochs=1000,
 
     print("... Building the model")
 
-    index = T.lscalar() # index to a mini-batch
+    index = T.lscalar()  # index to a mini-batch
 
     # Symbolic variables for input and output for a batch
     x = T.matrix('x')
@@ -74,18 +74,18 @@ def sgd_optimization_mnist(learning_rate=0.13, n_epochs=1000,
     test_model = theano.function(
         inputs=[index],
         outputs=classifier.errors(y),
-        givens={
-            x: test_set_x[index * batch_size: (index + 1) * batch_size],
-            y: test_set_y[index * batch_size: (index + 1) * batch_size]
-        }
+        givens=[
+            (x, test_set_x[index * batch_size: (index + 1) * batch_size]),
+            (y, test_set_y[index * batch_size: (index + 1) * batch_size])
+        ]
     )
     validate_model = theano.function(
         inputs=[index],
         outputs=classifier.errors(y),
-        givens={
-            x: valid_set_x[index * batch_size: (index + 1) * batch_size],
-            y: valid_set_y[index * batch_size: (index + 1) * batch_size]
-        }
+        givens=[
+            (x, valid_set_x[index * batch_size: (index + 1) * batch_size]),
+            (y, valid_set_y[index * batch_size: (index + 1) * batch_size])
+        ]
     )
 
     # Compute gradients wrt model parameters
@@ -99,10 +99,10 @@ def sgd_optimization_mnist(learning_rate=0.13, n_epochs=1000,
         inputs=[index],
         outputs=cost,
         updates=updates,
-        givens={
-            x: train_set_x[index * batch_size: (index + 1) * batch_size],
-            y: train_set_y[index * batch_size: (index + 1) * batch_size]
-        }
+        givens=[
+            (x, train_set_x[index * batch_size: (index + 1) * batch_size]),
+            (y, train_set_y[index * batch_size: (index + 1) * batch_size])
+        ]
     )
 
     ################
@@ -122,7 +122,7 @@ def sgd_optimization_mnist(learning_rate=0.13, n_epochs=1000,
     done_looping = False
     epoch = 0
     while (epoch < n_epochs) and (not done_looping):
-        epoch += 1
+        epoch = epoch + 1
         for minibatch_index in range(n_train_batches):
             minibatch_avg_cost = train_model(minibatch_index)
             # Iteration number
@@ -135,7 +135,7 @@ def sgd_optimization_mnist(learning_rate=0.13, n_epochs=1000,
                 this_validation_loss = numpy.mean(validation_losses)
 
                 print(
-                    'epoch %i, minimbatch %i/%i, validation error %f %%' %
+                    'epoch %i, minibatch %i/%i, validation error %f %%' %
                     (
                         epoch,
                         minibatch_index + 1,
@@ -144,37 +144,38 @@ def sgd_optimization_mnist(learning_rate=0.13, n_epochs=1000,
                     )
                 )
 
-            # Check if this is the best validation score
-            if this_validation_loss < best_validation_loss:
-                # Increase patience if gain is gain is significant
-                if this_validation_loss < best_validation_loss * \
-                        improvement_threshold:
-                    patience = max(patience, iter * patience_increase)
+                # Check if this is the best validation score
+                if this_validation_loss < best_validation_loss:
+                    # Increase patience if gain is gain is significant
+                    if this_validation_loss < best_validation_loss * \
+                            improvement_threshold:
+                        patience = max(patience, iter * patience_increase)
 
-                best_validation_loss = this_validation_loss
+                    best_validation_loss = this_validation_loss
 
-                # Get test scores
-                test_losses = [test_model(i) for i in range(n_test_batches)]
-                test_score = numpy.mean(test_losses)
+                    # Get test scores
+                    test_losses = [test_model(i) for i
+                                   in range(n_test_batches)]
+                    test_score = numpy.mean(test_losses)
 
-                print(
-                    'epoch %i, minimbatch %i/%i, test error of'
-                    'best model %f %%' %
-                    (
-                        epoch,
-                        minibatch_index + 1,
-                        n_train_batches,
-                        test_score * 100.
+                    print(
+                        'epoch %i, minibatch %i/%i, test error of'
+                        ' best model %f %%' %
+                        (
+                            epoch,
+                            minibatch_index + 1,
+                            n_train_batches,
+                            test_score * 100.
+                        )
                     )
-                )
         if patience <= iter:
             done_looping = True
             break
     end_time = timeit.default_timer()
     print(
         (
-            'Optimization complete with best validation score of %f %%,'
-            'with test performance of %f %%'
+            'Optimization complete with best validation error of %f %%,'
+            'with test error of %f %%'
         )
         % (best_validation_loss * 100., test_score * 100.)
     )
