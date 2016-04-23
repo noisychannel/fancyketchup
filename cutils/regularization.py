@@ -16,12 +16,12 @@ def L1(params):
         A symbolic expression for the regularizer term (should be
         added to the loss expression)
     """
-    return T.sum(abs(params))
+    return T.sum([abs(p).sum() for p in params])
 
 
 def L2(params):
     """
-    L2 regularization
+    L2 regularization (square)
 
     Parameters:
         params: The parameters of the model (Symbolic variables)
@@ -30,4 +30,4 @@ def L2(params):
         A symbolic expression for the regularizer term (should be
         added to the loss expression)
     """
-    return T.sum(params ** 2)
+    return T.sum([(p ** 2).sum() for p in params])

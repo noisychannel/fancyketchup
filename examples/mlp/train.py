@@ -13,7 +13,7 @@ from cutils.trainer import sgd
 script_path = os.path.dirname(os.path.realpath(__file__))
 sys.path.append(script_path)
 
-from logistic_regression import LogisticRegression
+from mlp import MLP
 
 
 def load_data(dataset_location):
@@ -48,8 +48,9 @@ def load_data(dataset_location):
     return rval
 
 
-def sgd_optimization_mnist(learning_rate=0.13, n_epochs=1000,
-                           dataset='mnist.pkl.gz', batch_size=600):
+def sgd_optimization_mnist_mlp(learning_rate=0.13, L1_reg=0.0, L2_reg=0.0001,
+                               n_epochs=1000, dataset='mnist.pkl.gz',
+                               batch_size=20, n_hidden=500):
     datasets = load_data(dataset)
 
     train_set_x, train_set_y = datasets[0]
@@ -70,12 +71,22 @@ def sgd_optimization_mnist(learning_rate=0.13, n_epochs=1000,
     x = T.matrix('x')
     y = T.ivector('y')
 
+    rng = numpy.random.RandomState(1234)
     # Build the logistic regression class
     # Images in MNIST are 28*28, there are 10 output classes
-    classifier = LogisticRegression(input=x, n_in=28 * 28, n_out=10)
+    classifier = MLP(
+        rng=rng,
+        input=x,
+        n_in=28*28,
+        n_hidden=n_hidden,
+        n_out=10)
 
     # Cost to minimize
-    cost = classifier.loss(y)
+    cost = (
+        classifier.loss(y)
+        + L1_reg * classifier.L1
+        + L2_reg * classifier.L2_sq
+    )
 
     # Compile function that measures test performance wrt the 0-1 loss
     test_model = theano.function(
@@ -113,7 +124,7 @@ def sgd_optimization_mnist(learning_rate=0.13, n_epochs=1000,
     ################
     print("... Training the model")
     # Early stopping parameters
-    patience = 5000  # Look at these many parameters regardless
+    patience = 10000  # Look at these many parameters regardless
     # Increase patience by this quantity when a best score is achieved
     patience_increase = 2
     improvement_threshold = 0.995  # Minimum significant improvement
@@ -172,8 +183,8 @@ def sgd_optimization_mnist(learning_rate=0.13, n_epochs=1000,
                         )
                     )
                     # Save the best model
-                    with open(script_path + '/best_model.pkl', 'wb') as f:
-                        cPickle.dump(classifier, f)
+                    #with open(script_path + '/best_model_mlp.pkl', 'wb') as f:
+                        #cPickle.dump(classifier, f)
 
         if patience <= iter:
             done_looping = True
@@ -191,4 +202,4 @@ def sgd_optimization_mnist(learning_rate=0.13, n_epochs=1000,
 
 
 if __name__ == '__main__':
-    sgd_optimization_mnist(dataset=sys.argv[1])
+    sgd_optimization_mnist_mlp(dataset=sys.argv[1])
