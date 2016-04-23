@@ -2,6 +2,7 @@
 A collection of loss functions for use with Theano
 """
 
+import theano
 import theano.tensor as T
 
 
@@ -16,7 +17,7 @@ def zero_one_loss(y_pred, y):
             Expected format : Vector
     Returns : The zero one loss for the dataset with true label y
     """
-    return T.mean(T.neq(y_pred, y))
+    return T.mean(T.neq(y_pred, y), dtype=theano.config.floatX)
 
 
 def negative_log_likelihood(p_y_given_x, y):
@@ -34,4 +35,5 @@ def negative_log_likelihood(p_y_given_x, y):
     """
     # The arange, y combination will return M[0,y_1], ... , M[n, y_n]
     # where M is the matrix being indexed
-    return -T.mean(T.log(p_y_given_x)[T.arange(y.shape[0]), y])
+    return -T.mean(T.log(p_y_given_x)[T.arange(y.shape[0]), y],
+                   dtype=theano.config.floatX)

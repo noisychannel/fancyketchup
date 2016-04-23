@@ -79,7 +79,6 @@ class LogisticRegression(object):
             )
         # check if y has the correct datatype
         if y.dtype.startswith('int'):
-            return T.mean(T.neq(self.y_pred, y))
-            #return zero_one_loss(self.p_y_given_x, y)
+            return zero_one_loss(self.y_pred, y)
         else:
             raise NotImplementedError()
