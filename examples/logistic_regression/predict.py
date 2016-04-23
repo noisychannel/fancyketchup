@@ -1,6 +1,10 @@
+import os
 import sys
 import theano
 import cPickle
+
+# Include current path in the pythonpath
+sys.path.append(os.path.dirname(os.path.realpath(__file__)))
 
 from train import load_data
 

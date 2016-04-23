@@ -2,7 +2,7 @@ import theano
 import theano.tensor as T
 import numpy
 
-from loss_functions import negative_log_likelihood, zero_one_loss
+from cutils.loss_functions import negative_log_likelihood, zero_one_loss
 
 
 class LogisticRegression(object):

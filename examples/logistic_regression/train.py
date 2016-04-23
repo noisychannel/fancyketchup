@@ -1,3 +1,4 @@
+import os
 import sys
 import theano
 import theano.tensor as T
@@ -5,6 +6,10 @@ import cPickle
 import gzip
 import numpy
 import timeit
+
+# Include current path in the pythonpath
+script_path = os.path.dirname(os.path.realpath(__file__))
+sys.path.append(script_path)
 
 from logistic_regression import LogisticRegression
 
@@ -169,7 +174,7 @@ def sgd_optimization_mnist(learning_rate=0.13, n_epochs=1000,
                         )
                     )
                     # Save the best model
-                    with open('best_model.pkl', 'wb') as f:
+                    with open(script_path + 'best_model.pkl', 'wb') as f:
                         cPickle.dump(classifier, f)
 
         if patience <= iter:
