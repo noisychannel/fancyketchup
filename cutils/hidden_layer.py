@@ -1,7 +1,8 @@
 import numpy
 import theano
 import theano.tensor as T
-import warnings
+
+from utils import xavier_init
 
 
 class HiddenLayer(object):
@@ -38,7 +39,7 @@ class HiddenLayer(object):
         self.input = input
         if W is None:
             if w_init == "xavier":
-                W_values = self.xavier_init(rng, n_in, n_out, activation)
+                W_values = xavier_init(rng, n_in, n_out, activation)
                 W = theano.shared(value=W_values, name='W', borrow=True)
             else:
                 raise NotImplementedError()
@@ -59,24 +60,3 @@ class HiddenLayer(object):
             lin_output if activation is None
             else activation(lin_output)
         )
-
-    def xavier_init(self, rng, n_in, n_out, activation):
-        """
-        Returns a matrix (n_in X n_out) based on the
-        Xavier initialization technique
-        """
-        if activation not in [T.tanh, T.nnet.sigmoid]:
-            warnings.warn("You are using the Xavier init with an \
-                           activation function that is not tanh \
-                           or sigmoid.")
-        W_values = numpy.asarray(
-            rng.uniform(
-                low=-numpy.sqrt(6. / (n_in + n_out)),
-                high=numpy.sqrt(6. / (n_in + n_out)),
-                size=(n_in, n_out),
-            ),
-            dtype=theano.config.floatX
-        )
-        if activation == T.nnet.sigmoid:
-            return W_values * 4
-        return W_values

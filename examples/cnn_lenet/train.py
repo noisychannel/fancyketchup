@@ -8,12 +8,14 @@ import numpy
 import timeit
 
 from cutils.trainer import sgd
+from cutils.hidden_layer import HiddenLayer
+from cutils.lenet_conv_pool_layer import LeNetConvPoolLayer
 
 # Include current path in the pythonpath
 script_path = os.path.dirname(os.path.realpath(__file__))
-sys.path.append(script_path)
+sys.path.append(script_path + "/../logistic_regression")
 
-from mlp import MLP
+from logistic_regression import LogisticRegression
 
 
 def load_data(dataset_location):
@@ -48,9 +50,9 @@ def load_data(dataset_location):
     return rval
 
 
-def sgd_optimization_mnist_mlp(learning_rate=0.01, L1_reg=0.0, L2_reg=0.0001,
-                               n_epochs=1000, dataset='mnist.pkl.gz',
-                               batch_size=20, n_hidden=500):
+def sgd_optimization_mnist_mlp(learning_rate=0.1, nkerns=[20, 50],
+                               n_epochs=200, dataset='mnist.pkl.gz',
+                               batch_size=500, n_hidden=500):
     datasets = load_data(dataset)
 
     train_set_x, train_set_y = datasets[0]
@@ -71,22 +73,59 @@ def sgd_optimization_mnist_mlp(learning_rate=0.01, L1_reg=0.0, L2_reg=0.0001,
     x = T.matrix('x')
     y = T.ivector('y')
 
-    rng = numpy.random.RandomState(1234)
-    # Build the logistic regression class
-    # Images in MNIST are 28*28, there are 10 output classes
-    classifier = MLP(
-        rng=rng,
-        input=x,
-        n_in=28*28,
-        n_hidden=n_hidden,
-        n_out=10)
+    rng = numpy.random.RandomState(23455)
+
+    # Reshape input to fit the shape of the image_shape
+    # (batch_size, num_input_feature_maps, image_height, image_width)
+    layer0_input = x.reshape((batch_size, 1, 28, 28))
+
+    # First convolution layer
+    # Applies 5x5 filters to the input image
+    # Reduces the size of the image to (28-5+1, 28-5+1) = (24,24)
+    # Maxpooling reduces this to (12/12)
+    # Output size is then (batch_size, nkerns[0], 12, 12)
+    # Note: For each image, multiple feature maps are extracted
+    # Each feature map is of size f_height * f_width
+    layer0 = LeNetConvPoolLayer(
+        rng,
+        input=layer0_input,
+        image_shape=(batch_size, 1, 28, 28),
+        filter_shape=(nkerns[0], 1, 5, 5),
+        poolsize=(2, 2)
+    )
+
+    # Second conv layer
+    # Each feature map convolves input from each input
+    # feature map and applies pooling.
+    # Output size = (batch_size, nkerns[1], 4, 4)
+    layer1 = LeNetConvPoolLayer(
+        rng,
+        input=layer0.output,
+        image_shape=(batch_size, nkerns[0], 12, 12),
+        filter_shape=(nkerns[1], nkerns[0], 5, 5),
+        poolsize=(2, 2)
+    )
+
+    # Flatten the output of layer1 for a standard fully
+    # connected hidden layer (batch_size x input)
+    # input = nkerns[1] * 4 * 4
+    # Flatten retains the leading ndim-1 dimensions and merges the rest
+    layer2_input = layer1.output.flatten(2)
+
+    layer2 = HiddenLayer(
+        rng,
+        input=layer2_input,
+        n_in=nkerns[1] * 4 * 4,
+        n_out=n_hidden,
+        activation=T.tanh
+    )
+
+    # Apply logistic regression to perform classification
+    classifier = LogisticRegression(input=layer2.output,
+                                    n_in=n_hidden, n_out=10)
 
     # Cost to minimize
-    cost = (
-        classifier.loss(y)
-        + L1_reg * classifier.L1
-        + L2_reg * classifier.L2_sq
-    )
+    cost = classifier.loss(y)
 
     # Compile function that measures test performance wrt the 0-1 loss
     test_model = theano.function(
