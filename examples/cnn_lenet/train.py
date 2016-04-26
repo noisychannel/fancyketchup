@@ -51,7 +51,7 @@ def load_data(dataset_location):
 
 
 def sgd_optimization_mnist_mlp(learning_rate=0.1, nkerns=[20, 50],
-                               n_epochs=200, dataset='mnist.pkl.gz',
+                               n_epochs=2000, dataset='mnist.pkl.gz',
                                batch_size=500, n_hidden=500):
     datasets = load_data(dataset)
 
@@ -145,8 +145,9 @@ def sgd_optimization_mnist_mlp(learning_rate=0.1, nkerns=[20, 50],
         ]
     )
 
+    params = classifier.params + layer2.params + layer1.params + layer0.params
     # Stochastic Gradient descent
-    updates = sgd(cost, classifier.params, learning_rate)
+    updates = sgd(cost, params, learning_rate)
 
     train_model = theano.function(
         inputs=[index],
