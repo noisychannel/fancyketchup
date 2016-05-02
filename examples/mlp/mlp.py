@@ -1,15 +1,12 @@
 import os
-import sys
 import theano.tensor as T
 
 import cutils.regularization as reg
 from cutils.hidden_layer import HiddenLayer
+from cutils.logistic_regression import LogisticRegression
 
 # Include logistic_regressioncurrent path in the pythonpath
 script_path = os.path.dirname(os.path.realpath(__file__))
-sys.path.append(script_path + "/../logistic_regression")
-
-from logistic_regression import LogisticRegression
 
 
 class MLP(object):

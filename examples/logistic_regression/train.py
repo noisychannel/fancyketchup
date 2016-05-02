@@ -8,12 +8,10 @@ import numpy
 import timeit
 
 from cutils.trainer import sgd
+from cutils.logistic_regression import LogisticRegression
 
 # Include current path in the pythonpath
 script_path = os.path.dirname(os.path.realpath(__file__))
-sys.path.append(script_path)
-
-from logistic_regression import LogisticRegression
 
 
 def load_data(dataset_location):

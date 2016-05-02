@@ -37,3 +37,20 @@ def negative_log_likelihood(p_y_given_x, y):
     # where M is the matrix being indexed
     return -T.mean(T.log(p_y_given_x)[T.arange(y.shape[0]), y],
                    dtype=theano.config.floatX)
+
+
+def binary_cross_entropy_loss(true_value, p_true_value):
+    """
+    Implementes the binary cross entropy loss function
+
+    Parameters:
+        :type true_value: theano.tensor.TensorType
+        :param true_value : The actual value of the label
+            This can be a matrix of values, one row for one example
+
+        :type p_true_value: theano.tensor.TensorType
+        :param p_true_value : The probability of the true label according to
+            the model. One row for one example
+    """
+    return -T.sum(true_value * T.log(p_true_value)
+                  + (1 - true_value) * T.log(1 - p_true_value), axis=1)

@@ -2,18 +2,21 @@ import os
 import sys
 import theano
 import theano.tensor as T
+from theano.tensor.shared_randomstreams import RandomStreams
 import cPickle
 import gzip
 import numpy
 import timeit
+from PIL import Image
 
 from cutils.trainer import sgd
-from cutils.hidden_layer import HiddenLayer
-from cutils.logistic_regression import LogisticRegression
-from cutils.lenet_conv_pool_layer import LeNetConvPoolLayer
+from cutils.utils import tile_raster_images
 
 # Include current path in the pythonpath
 script_path = os.path.dirname(os.path.realpath(__file__))
+sys.path.append(script_path)
+
+from stacked_autoencoder import SdA
 
 
 def load_data(dataset_location):
@@ -48,114 +51,43 @@ def load_data(dataset_location):
     return rval
 
 
-def sgd_optimization_mnist_mlp(learning_rate=0.1, nkerns=[20, 50],
-                               n_epochs=200, dataset='mnist.pkl.gz',
-                               batch_size=500, n_hidden=500):
-    datasets = load_data(dataset)
-
-    train_set_x, train_set_y = datasets[0]
-    valid_set_x, valid_set_y = datasets[1]
-    test_set_x, test_set_y = datasets[2]
-
-    # Notice that get_value is called with borrow
-    # so that a deep copy of the input is not created
-    n_train_batches = train_set_x.get_value(borrow=True).shape[0] // batch_size
-    n_valid_batches = valid_set_x.get_value(borrow=True).shape[0] // batch_size
-    n_test_batches = test_set_x.get_value(borrow=True).shape[0] // batch_size
-
+def sgd_optimization_mnist_sda(learning_rate=0.1, n_epochs=15,
+                              dataset='mnist.pkl.gz', batch_size=20):
+    # Initialize the stacked autoencoder
+    numpy_rng = numpy.random.RandomState(89677)
     print("... Building the model")
+    sda = SdA(
+        numpy_rng=numpy_rng,
+        n_ins=28 * 28,
+        hidden_layers_sizes=[1000, 1000, 1000],
+        n_outs=10)
 
-    index = T.lscalar()  # index to a mini-batch
+    # Implement pretraining first
+    print("... fetching the pretraining functions")
+    pretraining_fns = sda.pretraining_functions(
+        train_set_x=train_set_x,
+        train_set_y=train_set_y)
+    print("... pretraining the model")
+    start_time = timeit.default_timer()
+    # Do layer wise pre-training
+    corruption_levels = [.1, .2, .3]
+    for i in range(sda.n_layers):
+        # Run training for pretraining_epochs
+        for epoch in pretraining_epochs:
+            c = []
+            for batch_index in range(n_train_batches):
+                c.append(pretraining_fns[i](index=batch_index,
+                         corruption=corruption_levels[i],
+                         lr=pretrain_lr))
 
-    # Symbolic variables for input and output for a batch
-    x = T.matrix('x')
-    y = T.ivector('y')
+            print('Pre-training layer %i, epoch %d, cost %f'
+                  % (i, epoch, numpy.mean(c)))
 
-    rng = numpy.random.RandomState(23455)
-
-    # Reshape input to fit the shape of the image_shape
-    # (batch_size, num_input_feature_maps, image_height, image_width)
-    layer0_input = x.reshape((batch_size, 1, 28, 28))
-
-    # First convolution layer
-    # Applies 5x5 filters to the input image
-    # Reduces the size of the image to (28-5+1, 28-5+1) = (24,24)
-    # Maxpooling reduces this to (12/12)
-    # Output size is then (batch_size, nkerns[0], 12, 12)
-    # Note: For each image, multiple feature maps are extracted
-    # Each feature map is of size f_height * f_width
-    layer0 = LeNetConvPoolLayer(
-        rng,
-        input=layer0_input,
-        image_shape=(batch_size, 1, 28, 28),
-        filter_shape=(nkerns[0], 1, 5, 5),
-        poolsize=(2, 2)
-    )
-
-    # Second conv layer
-    # Each feature map convolves input from each input
-    # feature map and applies pooling.
-    # Output size = (batch_size, nkerns[1], 4, 4)
-    layer1 = LeNetConvPoolLayer(
-        rng,
-        input=layer0.output,
-        image_shape=(batch_size, nkerns[0], 12, 12),
-        filter_shape=(nkerns[1], nkerns[0], 5, 5),
-        poolsize=(2, 2)
-    )
-
-    # Flatten the output of layer1 for a standard fully
-    # connected hidden layer (batch_size x input)
-    # input = nkerns[1] * 4 * 4
-    # Flatten retains the leading ndim-1 dimensions and merges the rest
-    layer2_input = layer1.output.flatten(2)
-
-    layer2 = HiddenLayer(
-        rng,
-        input=layer2_input,
-        n_in=nkerns[1] * 4 * 4,
-        n_out=n_hidden,
-        activation=T.tanh
-    )
-
-    # Apply logistic regression to perform classification
-    classifier = LogisticRegression(input=layer2.output,
-                                    n_in=n_hidden, n_out=10)
-
-    # Cost to minimize
-    cost = classifier.loss(y)
-
-    # Compile function that measures test performance wrt the 0-1 loss
-    test_model = theano.function(
-        inputs=[index],
-        outputs=classifier.errors(y),
-        givens=[
-            (x, test_set_x[index * batch_size: (index + 1) * batch_size]),
-            (y, test_set_y[index * batch_size: (index + 1) * batch_size])
-        ]
-    )
-    validate_model = theano.function(
-        inputs=[index],
-        outputs=classifier.errors(y),
-        givens=[
-            (x, valid_set_x[index * batch_size: (index + 1) * batch_size]),
-            (y, valid_set_y[index * batch_size: (index + 1) * batch_size])
-        ]
-    )
-
-    params = classifier.params + layer2.params + layer1.params + layer0.params
-    # Stochastic Gradient descent
-    updates = sgd(cost, params, learning_rate)
-
-    train_model = theano.function(
-        inputs=[index],
-        outputs=cost,
-        updates=updates,
-        givens=[
-            (x, train_set_x[index * batch_size: (index + 1) * batch_size]),
-            (y, train_set_y[index * batch_size: (index + 1) * batch_size])
-        ]
-    )
+    end_time = timeit.default_timer()
+    pretraining_time = end_time - start_time
+    print('The pretraining code for file ' +
+          os.path.split(__file__)[1] +
+          ' ran for %.2fm' % ((pretraining_time) / 60.))
 
     ################
     # TRAIN MODEL  #
@@ -220,9 +152,6 @@ def sgd_optimization_mnist_mlp(learning_rate=0.1, nkerns=[20, 50],
                             test_score * 100.
                         )
                     )
-                    # Save the best model
-                    #with open(script_path + '/best_model_mlp.pkl', 'wb') as f:
-                        #cPickle.dump(classifier, f)
 
         if patience <= iter:
             done_looping = True
@@ -240,4 +169,4 @@ def sgd_optimization_mnist_mlp(learning_rate=0.1, nkerns=[20, 50],
 
 
 if __name__ == '__main__':
-    sgd_optimization_mnist_mlp(dataset=sys.argv[1])
+    sgd_optimization_mnist_sda(dataset=sys.argv[1])
