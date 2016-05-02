@@ -59,7 +59,7 @@ def sgd_optimization_mnist_da(learning_rate=0.1, n_epochs=15,
     valid_set_x, valid_set_y = datasets[1]
     test_set_x, test_set_y = datasets[2]
 
-    # Notice that get_value is called with borrow
+    # notice that get_value is called with borrow
     # so that a deep copy of the input is not created
     n_train_batches = train_set_x.get_value(borrow=True).shape[0] // batch_size
 
@@ -118,7 +118,7 @@ def sgd_optimization_mnist_da(learning_rate=0.1, n_epochs=15,
         print(('The {0} corruption code for file ' +
               os.path.split(__file__)[1] +
               ' ran for {1:.2f}m').format(corruption_level * 100,
-                                     (training_time) / 60.))
+                                          (training_time) / 60.))
 
         image = Image.fromarray(
             tile_raster_images(X=da.W.get_value(borrow=True).T,

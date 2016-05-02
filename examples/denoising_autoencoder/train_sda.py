@@ -2,15 +2,10 @@ import os
 import sys
 import theano
 import theano.tensor as T
-from theano.tensor.shared_randomstreams import RandomStreams
 import cPickle
 import gzip
 import numpy
 import timeit
-from PIL import Image
-
-from cutils.trainer import sgd
-from cutils.utils import tile_raster_images
 
 # Include current path in the pythonpath
 script_path = os.path.dirname(os.path.realpath(__file__))
@@ -51,8 +46,16 @@ def load_data(dataset_location):
     return rval
 
 
-def sgd_optimization_mnist_sda(learning_rate=0.1, n_epochs=15,
-                              dataset='mnist.pkl.gz', batch_size=20):
+def sgd_optimization_mnist_sda(finetune_lr=0.1, pretraining_epochs=15,
+                               pretrain_lr=0.001, training_epochs=1000,
+                               dataset='mnist.pkl.gz', batch_size=1):
+    datasets = load_data(dataset)
+
+    train_set_x, train_set_y = datasets[0]
+
+    # notice that get_value is called with borrow
+    # so that a deep copy of the input is not created
+    n_train_batches = train_set_x.get_value(borrow=True).shape[0] // batch_size
     # Initialize the stacked autoencoder
     numpy_rng = numpy.random.RandomState(89677)
     print("... Building the model")
@@ -66,35 +69,40 @@ def sgd_optimization_mnist_sda(learning_rate=0.1, n_epochs=15,
     print("... fetching the pretraining functions")
     pretraining_fns = sda.pretraining_functions(
         train_set_x=train_set_x,
-        train_set_y=train_set_y)
+        batch_size=batch_size)
     print("... pretraining the model")
     start_time = timeit.default_timer()
     # Do layer wise pre-training
     corruption_levels = [.1, .2, .3]
     for i in range(sda.n_layers):
         # Run training for pretraining_epochs
-        for epoch in pretraining_epochs:
+        for epoch in range(pretraining_epochs):
             c = []
             for batch_index in range(n_train_batches):
                 c.append(pretraining_fns[i](index=batch_index,
                          corruption=corruption_levels[i],
-                         lr=pretrain_lr))
+                         learning_rate=pretrain_lr))
 
-            print('Pre-training layer %i, epoch %d, cost %f'
-                  % (i, epoch, numpy.mean(c)))
+            print('Pre-training layer {0}, epoch {1}, cost {2}'.format(
+                  i, epoch, numpy.mean(c)))
 
     end_time = timeit.default_timer()
     pretraining_time = end_time - start_time
-    print('The pretraining code for file ' +
+    print(('The pre-training code for file ' +
           os.path.split(__file__)[1] +
-          ' ran for %.2fm' % ((pretraining_time) / 60.))
+          ' ran for {0:.2f}m').format(pretraining_time / 60.))
 
-    ################
-    # TRAIN MODEL  #
-    ################
-    print("... Training the model")
+    ####################
+    # FINE TUNE MODEL  #
+    ####################
+    print("... fetching the pretraining functions")
+    train_model, validate_model, test_model = sda.build_finetune_functions(
+        datasets=datasets,
+        batch_size=batch_size,
+        learning_rate=finetune_lr)
+    print("... finetuning the model")
     # Early stopping parameters
-    patience = 10000  # Look at these many parameters regardless
+    patience = 10 * n_train_batches  # Look at these many parameters regardless
     # Increase patience by this quantity when a best score is achieved
     patience_increase = 2
     improvement_threshold = 0.995  # Minimum significant improvement
@@ -105,7 +113,7 @@ def sgd_optimization_mnist_sda(learning_rate=0.1, n_epochs=15,
 
     done_looping = False
     epoch = 0
-    while (epoch < n_epochs) and (not done_looping):
+    while (epoch < training_epochs) and (not done_looping):
         epoch = epoch + 1
         for minibatch_index in range(n_train_batches):
             minibatch_avg_cost = train_model(minibatch_index)
@@ -114,8 +122,7 @@ def sgd_optimization_mnist_sda(learning_rate=0.1, n_epochs=15,
             # Check if validation needs to be performed
             if (iter + 1) % validation_frequency == 0:
                 # Compute average 0-1 loss on validation set
-                validation_losses = [validate_model(i)
-                                     for i in range(n_valid_batches)]
+                validation_losses = validate_model()
                 this_validation_loss = numpy.mean(validation_losses)
 
                 print(
@@ -138,8 +145,7 @@ def sgd_optimization_mnist_sda(learning_rate=0.1, n_epochs=15,
                     best_validation_loss = this_validation_loss
 
                     # Get test scores
-                    test_losses = [test_model(i) for i
-                                   in range(n_test_batches)]
+                    test_losses = test_model()
                     test_score = numpy.mean(test_losses)
 
                     print(
@@ -164,7 +170,7 @@ def sgd_optimization_mnist_sda(learning_rate=0.1, n_epochs=15,
         )
         % (best_validation_loss * 100., test_score * 100.)
     )
-    print ('The code run for %d epochs, with %f epochs/sec' % (
+    print ('The code ran for %d epochs, with %f epochs/sec' % (
         epoch, 1. * epoch / (end_time - start_time)))
 
 
