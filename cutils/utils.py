@@ -10,9 +10,9 @@ def xavier_init(rng, n_in, n_out, activation, size=None):
     Xavier initialization technique
     """
 
-    if activation not in [T.tanh, T.nnet.sigmoid]:
+    if activation not in [T.tanh, T.nnet.sigmoid, T.nnet.relu]:
         warnings.warn("You are using the Xavier init with an \
-                       activation function that is not sigmoidal")
+                       activation function that is not sigmoidal or relu")
     # Default value for size
     if size is None:
         size = (n_in, n_out)
@@ -26,6 +26,8 @@ def xavier_init(rng, n_in, n_out, activation, size=None):
     )
     if activation == T.nnet.sigmoid:
         return W_values * 4
+    if activation == T.nnet.relu:
+        return W_values * numpy.sqrt(2.)
     return W_values
 
 
