@@ -109,17 +109,17 @@ class SdA(object):
 
             self.dA_layers.append(dA_layer)
 
-            # Add a logistic layer on top of the MLP
-            self.log_layer = LogisticRegression(
-                input=self.sigmoid_layers[-1].output,
-                n_in=hidden_layers_sizes[-1],
-                n_out=n_outs
-            )
+        # Add a logistic layer on top of the MLP
+        self.log_layer = LogisticRegression(
+            input=self.sigmoid_layers[-1].output,
+            n_in=hidden_layers_sizes[-1],
+            n_out=n_outs
+        )
 
-            self.params.extend(self.log_layer.params)
+        self.params.extend(self.log_layer.params)
 
-            self.fine_tune_cost = self.log_layer.loss(self.y)
-            self.errors = self.log_layer.errors(self.y)
+        self.fine_tune_cost = self.log_layer.loss(self.y)
+        self.errors = self.log_layer.errors(self.y)
 
     def pretraining_functions(self, train_set_x, batch_size):
         ''' Generates a list of functions, each of them implementing one
@@ -229,9 +229,9 @@ class SdA(object):
         )
 
         def valid_scores():
-            return [validate_model[i] for i in range(n_valid_batches)]
+            return [validate_model(i) for i in range(n_valid_batches)]
 
         def test_scores():
-            return [test_model[i] for i in range(n_test_batches)]
+            return [test_model(i) for i in range(n_test_batches)]
 
         return train_model, valid_scores, test_scores
