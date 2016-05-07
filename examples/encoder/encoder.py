@@ -1,7 +1,7 @@
 import theano
 import numpy
 import theano.tensor as T
-from cutils.utils import xavier_init
+from cutils.init import xavier_init
 
 
 class Encoder:
