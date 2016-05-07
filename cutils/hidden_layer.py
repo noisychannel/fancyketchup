@@ -2,7 +2,7 @@ import numpy
 import theano
 import theano.tensor as T
 
-from utils import xavier_init
+from init import xavier_init
 
 
 class HiddenLayer(object):

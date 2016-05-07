@@ -6,6 +6,7 @@ import numpy
 import random
 
 from cutils.dict import Dict
+from cutils.data_utils import bucket_and_pad
 
 # Include current path in the pythonpath
 script_path = os.path.dirname(os.path.realpath(__file__))
@@ -29,27 +30,6 @@ def load_data(fileloc, word_dict):
         valid_y.extend(data_y[4700:5000])
         test_x.extend(data_x[5000:])
         test_y.extend(data_y[5000:])
-
-    def bucket_and_pad(x, y, buckets):
-        """
-        Assumes x to be in a list of
-        emb_size X len_sent arrays
-
-        """
-        for sample, label in zip(x, y):
-            length_sample = sample.shape[1]
-            b = length_sample - length_sample % 10 + 10
-            # Create mask
-            mask = numpy.ones(length_sample)
-            # Pad sample and mask to bucket length
-            padded_sample = numpy.pad(sample, ((0, 0), (0, b - length_sample)),
-                                      'constant', constant_values=(0))
-            padded_mask = numpy.pad(mask, ((0, b - length_sample)),
-                                    'constant', constant_values=(0))
-            if b in buckets:
-                buckets[b][0].append(padded_sample)
-                buckets[b][1].append(label)
-                buckets[b][2].append(padded_mask)
 
     # Bucket data: x, y, masks
     train_buckets = {x: [[], [], []] for x in range(10, 60, 10)}

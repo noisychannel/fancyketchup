@@ -3,7 +3,7 @@ import theano
 import theano.tensor as T
 from theano.tensor.nnet import conv2d
 from theano.tensor.signal.pool import pool_2d
-from utils import xavier_init
+from init import xavier_init
 
 
 class LeNetConvPoolLayer(object):
