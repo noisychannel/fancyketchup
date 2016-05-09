@@ -6,8 +6,10 @@ import numpy
 import theano
 import theano.tensor as T
 from collections import OrderedDict
+from theano.sandbox.rng_mrg import MRG_RandomStreams as RandomStreams
 
 from cutils.numeric import numpy_floatX
+from cutils.init import ortho_weight
 
 import imdb
 
@@ -17,7 +19,8 @@ datasets = {'imdb': (imdb.load_data, imdb.prepare_data)}
 SEED = 123
 numpy.random.seed(SEED)
 
-#TODO: move
+
+# TODO: move
 def get_minibatches_idx(n, minibatch_size, shuffle=False):
     """
     Used to shuffle the dataset at each iteration
@@ -37,8 +40,10 @@ def get_minibatches_idx(n, minibatch_size, shuffle=False):
         # Put the remaining samples in a minibatch
         minibatches.append(idx_list[minibatch_start:])
 
+
 def get_dataset(name):
     return datasets[name][0], datasets[name][1]
+
 
 def zipp(params, tparams):
     """
@@ -46,6 +51,7 @@ def zipp(params, tparams):
     """
     for kk, vv in params.items():
         tparams[kk].set_value(vv)
+
 
 def unzip(zipped):
     """
@@ -56,19 +62,22 @@ def unzip(zipped):
         new_params[kk] = vv.get_value()
     return new_params
 
+
 def dropout_layer(state_before, use_noise, trng):
-    #TODO: move
-    #TODO: use the noise function that exists somewhere
+    # TODO: move
+    # TODO: use the noise function that exists somewhere
     proj = T.switch(use_noise,
                     (state_before *
                      trng.binomial(state_before.shape,
                                    p=0.5, n=1,
                                    dtype=state_before.dtype)),
-                     state_before * 0.5)
+                    state_before * 0.5)
     return proj
+
 
 def _p(pp, name):
     return '%s_%s' % (pp, name)
+
 
 def init_params(options):
     """
@@ -84,7 +93,8 @@ def init_params(options):
                                               params,
                                               prefix=options['encoder'])
     params['U'] = 0.01 * numpy.random.randn(options['dim_proj'],
-                                            options['ydim']).astype(theano.config.floatX)
+                                            options['ydim']) \
+        .astype(theano.config.floatX)
     params['b'] = numpy.zeros((options['ydim'],)).astype(theano.config.floatX)
     return params
 
@@ -98,45 +108,42 @@ def load_params(path, params):
 
     return params
 
+
 def init_tparams(params):
     tparams = OrderedDict()
     for kk, pp in params.items():
         tparams[kk] = theano.shared(params[kk], name=kk)
     return tparams
 
+
 def get_layer(name):
     fns = layers[name]
     return fns
 
-def ortho_weight(ndim):
-    #TODO: Move
-    W = numpy.random.randn(ndim, ndim)
-    u, s, v = numpy.linalg.svd(W)
-    return u.astype(theano.config.floatX)
 
 def param_init_lstm(options, params, prefix='lstm'):
     """
     Initialize the LSTM params
     """
-    W = numpy.concatenate(
-            [ortho_weight(options['dim_proj']),
-             ortho_weight(options['dim_proj']),
-             ortho_weight(options['dim_proj']),
-             ortho_weight(options['dim_proj'])], axis=1)
+    rng = numpy.random.RandomState(SEED)
+    W = numpy.concatenate([ortho_weight(options['dim_proj'], rng),
+                           ortho_weight(options['dim_proj'], rng),
+                           ortho_weight(options['dim_proj'], rng),
+                           ortho_weight(options['dim_proj'], rng)], axis=1)
     params[_p(prefix, 'W')] = W
 
-    #TODO: why is the axis 1, figure out
-    U = numpy.concatenate(
-            [ortho_weight(options['dim_proj']),
-             ortho_weight(options['dim_proj']),
-             ortho_weight(options['dim_proj']),
-             ortho_weight(options['dim_proj'])], axis=1)
+    # TODO: why is the axis 1, figure out
+    U = numpy.concatenate([ortho_weight(options['dim_proj'], rng),
+                           ortho_weight(options['dim_proj'], rng),
+                           ortho_weight(options['dim_proj'], rng),
+                           ortho_weight(options['dim_proj'], rng)], axis=1)
     params[_p(prefix, 'U')] = U
 
     b = numpy.zeros((4 * options['dim_proj'],))
     params[_p(prefix, 'b')] = b.astype(theano.config.floatX)
 
     return params
+
 
 def lstm_layer(tparams, state_below, options, prefix='lstm', mask=None):
     # State below : steps x samples
@@ -190,5 +197,104 @@ def lstm_layer(tparams, state_below, options, prefix='lstm', mask=None):
 layers = {'lstm': (param_init_lstm, lstm_layer)}
 
 
+def build_model(tparams, options):
+    trng = RandomStreams(SEED)
+
+    # Used for dropout
+    use_noise = T.matrix('x', dtype='int64')
+    x = T.matrix('x', dtype='int64')
+    mask = T.matrix('mask', dtype=theano.config.floatX)
+    y = T.vector('y', dtype='int64')
+
+    n_timesteps = x.shape[0]
+    n_samples = x.shape[1]
+
+    emb = tparams['Wemb'][x.flatten()].reshape([n_timesteps,
+                                                n_samples,
+                                                options['dim_proj']])
+    proj = get_layer(options['encoder'])[1](tparams, emb, options,
+                                            prefix=options['encoder'],
+                                            mask=mask)
+    if options['encoder'] == 'lstm':
+        proj = (proj * mask[:, :, None]).sum(axis=0)
+        proj = proj / mask.sum(axis=0)[:, None]
+    if options['use_dropout']:
+        proj = dropout_layer(proj, use_noise, trng)
+
+    pred = T.nnet.softmax(T.dot(proj, tparams['U']) + tparams['b'])
+
+    f_pred_prob = theano.function([x, mask], pred, name='f_pred_prob')
+    f_pred = theano.function([x, mask], pred.argmax(axis=1), name='f_pred')
+
+    off = 1e-8
+    if pred.dtype == 'float16':
+        off = 1e-6
+
+    cost = -T.log(pred[T.arange(n_samples), y] + off).mean()
+
+    return use_noise, x, mask, y, f_pred_prob, f_pred, cost
 
 
+def pred_probs(f_pred_prob, prepare_data, data, iterator, verbose=False):
+    """
+    Probabilities for new examples from a trained model
+    """
+    n_samples = len(data[0])
+    probs = numpy.zeros((n_samples, 2)).astype(theano.config.floatX)
+
+    n_done = 0
+
+    for _, valid_index in iterator:
+        x, mask, y = prepare_data([data[0][t] for t in valid_index],
+                                  numpy.array(data[1])[valid_index],
+                                  maxlen=None)
+        pred_probs = f_pred_prob(x, mask)
+        probs[valid_index, :] = pred_probs
+
+        n_done += len(valid_index)
+        if verbose:
+            print("%d/%d samples classified" % (n_done, n_samples))
+
+    return probs
+
+
+def pred_error(f_pred, prepare_data, data, iterator, verbose=False):
+    """
+    Errors for samples for a trained model
+    """
+    valid_err = 0
+    for _, valid_index in iterator:
+        x, mask, y = prepare_data([data[0][t] for t in valid_index],
+                                  numpy.array(data[1])[valid_index],
+                                  maxlen=None)
+        preds = f_pred(x, mask)
+        targets = numpy.array(data[1])[valid_index]
+        valid_err += (preds == targets).sum()
+    valid_err = 1. - numpy_floatX(valid_err) / len(data[0])
+
+    return valid_err
+
+
+def train_lstm(
+    dim_proj=128,
+    patience=10,
+    max_epochs=5000,
+    disp_freq=10,
+    decay_c=0.,
+    lrate=0.0001,
+    n_words=10000,
+    optimizer='adadelta',
+    encoder='lstm',
+    save_to='lstm_model.npz',
+    valid_freq=370,
+    save_freq=1110,
+    maxlen=100,
+    batch_size=16,
+    valid_batch_size=64,
+    dataset='imdb',
+    noise_std=0.,
+    use_dropout=True,
+    reload_model=None,
+    test_size=-1
+):
+    pass

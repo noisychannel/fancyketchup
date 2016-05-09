@@ -1,5 +1,6 @@
 import warnings
 import numpy
+import theano
 import theano.tensor as T
 
 from numeric import numpy_floatX
@@ -28,3 +29,13 @@ def xavier_init(rng, n_in, n_out, activation, size=None):
     if activation == T.nnet.relu:
         return W_values * numpy.sqrt(2.)
     return W_values
+
+
+def ortho_weight(ndim):
+    """
+    Returns an orthogonal matrix via SVD decomp
+    Used for initializing weight matrices of an LSTM
+    """
+    W = numpy.random.randn(ndim, ndim)
+    u, s, v = numpy.linalg.svd(W)
+    return u.astype(theano.config.floatX)
