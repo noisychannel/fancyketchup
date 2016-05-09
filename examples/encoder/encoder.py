@@ -47,13 +47,21 @@ class Encoder:
                 ),
                 borrow=True
             )
+        h0 = theano.shared(
+            value=numpy.zeros(
+                n_hidden,
+                dtype=theano.config.floatX
+            ),
+            borrow=True
+        )
+        self.h0 = h0
         self.W_x = W_x
         self.W_h = W_h
         self.b = b
         self.params = [self.W_x, self.W_h, self.b]
 
-    def get_hidden_states(self, input):
-        assert input.shape[0] == self.n_input
+        # Create tensorvariables to accept input
+        x = T.tensor3('x')
 
         def recurrence(x_t, h_tm1):
             h_t = self.activation(T.dot(self.W_x, x_t) +
@@ -62,6 +70,35 @@ class Encoder:
             return h_t
 
         h, _ = theano.scan(fn=recurrence,
-                           sequences=input,
-                           outputs_info=[self.h0, None],
-                           n_steps=input.shape[1])
+                           sequences=x,
+                           outputs_info=[self.h0],
+                           n_steps=x.shape[1])
+        self.h = h
+        return self.h
+
+    def get_hidden_states(self):
+        if self.h is None:
+            raise Exception("The hidden states for this RNN have not \
+                             been computed yet")
+        return self.h
+
+    def get_context_embedding(self):
+        if self.h is None:
+            raise Exception("The hidden states for this RNN have not \
+                             been computed yet")
+        get_hidden_states = theano.function(
+            inputs=[index],
+            outputs=encoder.compute_hidden_states_no_output(x),
+            givens=[
+                (x, test_set[10][0][index * batch_size: (index + 1) * batch_size]),
+                (m, test_set[10][2][index * batch_size: (index + 1) * batch_size])
+            ]
+        )
+
+        context = T.sum(get_hidden_states(index))
+        log_regression_layer = LogisticRegression(
+            input=context,
+            n_in=n_hidden,
+            n_out=2
+        )
+

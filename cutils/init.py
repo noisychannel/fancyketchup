@@ -1,7 +1,8 @@
 import warnings
 import numpy
-import theano
 import theano.tensor as T
+
+from numeric import numpy_floatX
 
 
 def xavier_init(rng, n_in, n_out, activation, size=None):
@@ -16,14 +17,12 @@ def xavier_init(rng, n_in, n_out, activation, size=None):
     # Default value for size
     if size is None:
         size = (n_in, n_out)
-    W_values = numpy.asarray(
+    W_values = numpy_floatX(
         rng.uniform(
             low=-numpy.sqrt(6. / (n_in + n_out)),
             high=numpy.sqrt(6. / (n_in + n_out)),
             size=size,
-        ),
-        dtype=theano.config.floatX
-    )
+        ))
     if activation == T.nnet.sigmoid:
         return W_values * 4
     if activation == T.nnet.relu:

@@ -1,5 +1,6 @@
 import numpy
-import theano
+
+from numeric import numpy_floatX
 
 
 class Dict:
@@ -27,11 +28,10 @@ class Dict:
         self.lock = True
 
     def get_new_embedding(self):
-        return numpy.asarray(self.rng.uniform(
+        return numpy_floatX(self.rng.uniform(
             low=-1., high=1.,
             size=(self.embedding_size)
-            ),
-            dtype=theano.config.floatX
+            )
         )
 
     def read_sentence(self, line):

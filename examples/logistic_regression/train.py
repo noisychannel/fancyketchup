@@ -8,6 +8,7 @@ import numpy
 import timeit
 
 from cutils.trainer import sgd
+from cutils.numeric import numpy_floatX
 from cutils.logistic_regression import LogisticRegression
 
 # Include current path in the pythonpath
@@ -28,11 +29,9 @@ def load_data(dataset_location):
         """ Load the dataset into shared variables """
         data_x, data_y = data_xy
         assert len(data_x) == len(data_y)
-        shared_x = theano.shared(numpy.asarray(data_x,
-                                               dtype=theano.config.floatX),
+        shared_x = theano.shared(numpy_floatX(data_x),
                                  borrow=borrow)
-        shared_y = theano.shared(numpy.asarray(data_y,
-                                               dtype=theano.config.floatX),
+        shared_y = theano.shared(numpy_floatX(data_y),
                                  borrow=borrow)
         # Cast the labels as int32, so that they can be used as indices
         return shared_x, T.cast(shared_y, 'int32')

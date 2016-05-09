@@ -2,10 +2,13 @@ import numpy
 import theano
 
 
-def bucket_and_pad(x, y, buckets):
+def bucket_and_pad(x, y, buckets, consolidate=False):
     """
     Assumes x to be in a list of
     emb_size X len_sent arrays
+
+    If consolidate is set to True, this will also convert the
+    list of samples in a bucket to a stacked array
 
     """
     for sample, label in zip(x, y):
@@ -20,8 +23,18 @@ def bucket_and_pad(x, y, buckets):
                                 'constant', constant_values=(0))
         if b in buckets:
             buckets[b][0].append(padded_sample)
-            buckets[b][1].append(label)
+            # TODO: Check whether a floatX is necessary here
+            buckets[b][1].append(numpy.asarray(label))
             buckets[b][2].append(padded_mask)
+
+    if consolidate:
+        for b in buckets.keys():
+            buckets[b][0] = numpy.stack(buckets[b][0],
+                                        axis=(len(buckets[b][0][0].shape)))
+            buckets[b][1] = numpy.stack(buckets[b][1],
+                                        axis=(len(buckets[b][1][0].shape)))
+            buckets[b][2] = numpy.stack(buckets[b][2],
+                                        axis=(len(buckets[b][2][0].shape)))
 
 
 def scale_to_unit_interval(ndar, eps=1e-8):
