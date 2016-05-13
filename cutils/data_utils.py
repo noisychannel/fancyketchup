@@ -1,5 +1,8 @@
+import os
 import numpy
 import theano
+from subprocess import Popen, PIPE
+from six.moves import urllib
 
 
 def bucket_and_pad(x, y, buckets, consolidate=False):
@@ -71,3 +74,45 @@ def mask_input(theano_rng, input, p):
     return theano_rng.binomial(size=input.shape, n=1,
                                p=1 - p,
                                dtype=theano.config.floatX) * input
+
+
+def tokenize(sentences, lang="en"):
+    # Download the tokenizer if it does not exist
+    cdir = os.path.dirname(__file__)
+    tok_origin = "https://raw.githubusercontent.com/moses-smt/mosesdecoder/master/scripts/tokenizer/tokenizer.perl"
+    tok_dest = os.path.join(cdir, "../scripts/tokenizer")
+    prefix_origin = "https://raw.githubusercontent.com/moses-smt/mosesdecoder/master/scripts/share/nonbreaking_prefixes"
+    prefix_dest = os.path.join(cdir, "../share/nonbreaking_prefixes")
+    if not os.path.isfile(tok_dest):
+        print('Downloading the tokenizer script')
+        urllib.request.urlretrieve(tok_origin, tok_dest)
+        os.chmod(tok_dest, 0775)
+    # Check if the non-breaking prefix exists for this lang
+    if not os.path.isfile(prefix_dest + '/nonbreaking_prefix.' + lang):
+        # attempt to download it
+        try:
+            try:
+                os.makedirs(prefix_dest)
+            except:
+                # Directory exists
+                pass
+            print('Downloading the non-breaking prefix file')
+            urllib.request.urlretrieve(prefix_origin + "/nonbreaking_prefix." + lang,
+                                       prefix_dest + "/nonbreaking_prefix." + lang)
+        except urllib.error.URLError, e:
+            if e.code == 404:
+                print('The prefix file for the lang %s could not be downloaded' % lang)
+            else:
+                print('An unknown error occured while trying to download the prefix \
+                       file for the lang %s' % lang)
+
+
+    tokenizer_cmd = [tok_dest, '-l', 'en', '-q', '-']
+    print('Tokenizing...')
+    text = '\n'.join(sentences)
+    tokenizer = Popen(tokenizer_cmd, stdin=PIPE, stdout=PIPE)
+    tok_text, _ = tokenizer.communicate(text)
+    toks = tok_text.split('\n')[:-1]
+    print('Done tokenizing')
+
+    return toks
