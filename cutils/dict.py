@@ -4,28 +4,32 @@ from numeric import numpy_floatX
 
 
 class Dict:
-    def __init__(self, embedding_size, rng):
+    def __init__(self, sentences, n_words):
         self.locked = False
-        self.rng = rng
-        self.embedding_size = embedding_size
-        self.words = {"UNK": 0}
-        self.embeddings = [self.get_new_embedding()]
-        self.next_word_index = 1
+        wordcount = dict()
+        for ss in sentences:
+            words = ss.strip().split()
+            for w in words:
+                if w not in wordcount:
+                    wordcount[w] = 0
+                wordcount[w] += 1
+        counts = wordcount.values()
+        keys = wordcount.keys()
+        # Reverse and truncate at max_words
+        sorted_idx = numpy.argsort(counts)[::-1][:n_words]
+        self.worddict = dict()
+        for idx, ss in enumerate(sorted_idx):
+            self.worddict[keys[ss]] = idx + 2
 
-    def add_word(self, word):
-        if not self.locked:
-            if word not in self.words:
-                self.words[word] = self.next_word_index
-                self.embeddings.append(self.get_new_embedding())
-                self.next_word_index += 1
-                return self.embeddings[-1]
-            else:
-                return self.embeddings[self.words[word]]
-        else:
-            raise Exception("Trying to add a word to a locked dictionary")
+        self.locked = True
 
-    def lock(self):
-        self.lock = True
+        print("Total words read by dict = %d" % numpy.sum(counts))
+        print("Total unique words read by dict = %d" % len(keys))
+        print("Total words retained = %d" % len(self.worddict))
+
+        self.embedding_size = None
+        self.rng = None
+        self.Wemb = None
 
     def get_new_embedding(self):
         return numpy_floatX(self.rng.uniform(
@@ -36,14 +40,10 @@ class Dict:
 
     def read_sentence(self, line):
         line = line.strip().split()
-        sequence = []
-        for word in line:
-            if word != "":
-                sequence.append(self.add_word(word))
-        return numpy.column_stack(sequence)
+        return [self.worddict[w] if w in self.worddict else 1 for w in line]
 
     def num_words(self):
-        return self.next_word_index
+        return len(self.worddict)
 
     def get_embedding(self, word):
         if word not in self.words:
