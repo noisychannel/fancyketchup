@@ -5,7 +5,7 @@ import theano.tensor as T
 from init import xavier_init
 
 
-class HiddenLayer(object):
+class DenseLayer(object):
     def __init__(self, rng, input, n_in, n_out, W=None, b=None,
                  activation=T.tanh, w_init="xavier", b_init="zero"):
         """
