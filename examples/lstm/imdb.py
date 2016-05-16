@@ -11,17 +11,24 @@ class IMDB(DataInterface):
         self.dataset_path = dataset_path
         self.origin = origin
         # Download the dataset if it does not exist
-        if not os.path.isfile(dataset_path):
+        if os.path.isdir(os.getcwd() + "/" + dataset_path):
+            self.dataset_path = os.getcwd() + "/" + dataset_path
+        if not os.path.isdir(dataset_path):
             if origin is not None:
                 DataInterface.download_dataset(dataset_path, origin)
             else:
                 raise Exception('Dataset not found and the origin was not specified')
         # Create dictionary
         self.dictionary = None
-
-    def load_data(self, n_words=100000, valid_portion=0.1,
-                  maxlen=None, sort_by_len=True):
+        print("... Building dictionary")
         self.build_dict(n_words)
+        print("... Done building dictionary")
+        self.train = None
+        self.valid = None
+        self.test = None
+
+    def load_data(self, valid_portion=0.1,
+                  maxlen=None, sort_by_len=True):
         train_x_pos = self.grab_data(self.dataset_path + "/train/pos")
         train_x_neg = self.grab_data(self.dataset_path + "/train/neg")
         train_x = train_x_pos + train_x_neg
@@ -67,12 +74,16 @@ class IMDB(DataInterface):
         valid = (valid_set_x, valid_set_y)
         test = (test_set_x, test_set_y)
 
+        self.train = train
+        self.valid = valid
+        self.test = test
+
         return train, valid, test
 
-    def grab_data(self):
+    def grab_data(self, dirpath):
         sentences = []
         currdir = os.getcwd()
-        os.chdir(self.dataset_path)
+        os.chdir(dirpath)
         for ff in glob.glob("*.txt"):
             with open(ff, 'r') as f:
                 sentences.append(f.readline().strip())
@@ -87,11 +98,11 @@ class IMDB(DataInterface):
     def build_dict(self, n_words):
         sentences = []
         currdir = os.getcwd()
-        os.chdir('%s/pos' % self.dataset_path)
+        os.chdir('%s/train/pos' % self.dataset_path)
         for ff in glob.glob("*.txt"):
             with open(ff, 'r') as f:
                 sentences.append(f.readline().strip())
-        os.chdir('%d/neg' % self.dataset_path)
+        os.chdir('%s/train/neg' % self.dataset_path)
         for ff in glob.glob("*.txt"):
             with open(ff, 'r') as f:
                 sentences.append(f.readline().strip())
@@ -99,3 +110,7 @@ class IMDB(DataInterface):
         sentences = DataInterface.tokenize(sentences)
         sentences = DataInterface.lowercase(sentences)
         self.dictionary = Dict(sentences, n_words)
+
+    def get_dataset_file(self):
+        """Download file if it does not exist"""
+        raise NotImplementedError

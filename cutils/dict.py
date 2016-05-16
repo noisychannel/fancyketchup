@@ -43,7 +43,8 @@ class Dict:
         return [self.worddict[w] if w in self.worddict else 1 for w in line]
 
     def num_words(self):
-        return len(self.worddict)
+        """ + 2 for the UNK symbols """
+        return len(self.worddict) + 2
 
     def get_embedding(self, word):
         if word not in self.words:
