@@ -2,7 +2,7 @@ from __future__ import print_function
 import os
 import glob
 
-from cutils.data_utils import DataInterface
+from cutils.data_interface.interface import DataInterface
 from cutils.dict import Dict
 
 

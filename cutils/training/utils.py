@@ -1,4 +1,7 @@
 import numpy
+import theano
+
+from cutils.numeric import numpy_floatX
 
 
 def get_minibatches_idx(n, minibatch_size, shuffle=False):
@@ -21,3 +24,16 @@ def get_minibatches_idx(n, minibatch_size, shuffle=False):
         minibatches.append(idx_list[minibatch_start:])
 
     return zip(range(len(minibatches)), minibatches)
+
+
+def weight_decay(U, decay_c):
+    """
+    cost is a Theano expression
+    U is a Theano variable
+    decay_c is a scalar
+    """
+    #TODO: Assert the datatypes
+    decay_c = theano.shared(numpy_floatX(decay_c), name='decay_c')
+    weight_decay = 0.
+    weight_decay += (U ** 2).sum()
+    weight_decay *= decay_c
