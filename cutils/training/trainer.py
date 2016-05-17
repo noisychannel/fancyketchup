@@ -38,7 +38,8 @@ def new_sgd(lr, tparams, grads, x, mask, y, cost):
                for k, p in tparams.items()]
     gsup = [(gs, g) for gs, g in zip(gshared, grads)]
     # Compute gradients but do not update them
-    f_grad_shared = theano.function([x, mask, y], cost, updates=gsup,
+    grad_input = [x, mask, y] if mask is not None else [x, y]
+    f_grad_shared = theano.function(grad_input, cost, updates=gsup,
                                     name='sgd_f_grad_shared')
     pup = [(p, p - lr * g) for p, g in zip(tparams.values(), gshared)]
     # Function which updates weights

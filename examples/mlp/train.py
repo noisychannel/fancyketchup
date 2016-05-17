@@ -7,7 +7,7 @@ import gzip
 import numpy
 import timeit
 
-from cutils.trainer import sgd
+from cutils.training.trainer import sgd
 from cutils.numeric import numpy_floatX
 
 # Include current path in the pythonpath

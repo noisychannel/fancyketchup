@@ -3,7 +3,7 @@ import numpy
 import theano
 import theano.tensor as T
 
-from numeric import numpy_floatX
+from cutils.numeric import numpy_floatX
 
 
 def xavier_init(rng, n_in, n_out, activation, size=None):

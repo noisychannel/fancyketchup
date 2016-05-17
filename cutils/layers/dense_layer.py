@@ -2,7 +2,7 @@ import numpy
 import theano
 import theano.tensor as T
 
-from init import xavier_init
+from cutils.params.init import xavier_init
 
 
 class DenseLayer(object):
