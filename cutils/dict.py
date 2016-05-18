@@ -3,6 +3,7 @@ import theano
 from collections import OrderedDict
 
 from cutils.params.utils import init_tparams
+from cutils.numeric import numpy_floatX
 
 
 class Dict:
@@ -25,6 +26,9 @@ class Dict:
         for idx, ss in enumerate(sorted_idx):
             self.worddict[keys[ss]] = idx + 2
 
+        self.noise_distribution = None
+        self.create_unigram_noise_dist(wordcount, n_words)
+
         self.locked = True
         self.n_words = len(self.worddict)
 
@@ -36,6 +40,15 @@ class Dict:
         self.rng = None
         self.Wemb = None
         self.initialize_embedding()
+
+    def create_unigram_noise_dist(self, wordcount, n_words):
+        counts = numpy.sort(wordcount.values())[::-1]
+        freq = [0, sum(counts[n_words:])] + list(counts[n_words:])
+        sum_freq = sum(freq)
+        noise_distribution = [float(k) / sum_freq for k in freq]
+        self.noise_distribution = init_tparams(
+            OrderedDict(['noise_d', numpy_floatX(noise_distribution)])
+        )['noise_d']
 
     def initialize_embedding(self):
         randn = numpy.random.rand(self.n_words, self.embedding_size)
