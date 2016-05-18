@@ -1,9 +1,12 @@
 import os
+import theano
 import theano.tensor as T
 
 import cutils.regularization as reg
 from cutils.layers.dense_layer import DenseLayer
 from cutils.layers.logistic_regression import LogisticRegression
+from cutils.layers.utils import dropout_layer
+from cutils.numeric import numpy_floatX
 
 # Include logistic_regressioncurrent path in the pythonpath
 script_path = os.path.dirname(os.path.realpath(__file__))
@@ -21,7 +24,9 @@ class NPLM(object):
     class).
     """
 
-    def __init__(self, rng, input, n_in, n_h1, n_h2, n_out):
+    def __init__(self, rng, input, n_in, n_h1, n_h2, n_out,
+                 use_dropout=False, trng=None, dropout_p=0.5,
+                 use_noise=theano.shared(numpy_floatX(0.))):
         """Initialize the parameters for the multilayer perceptron
 
         :type rng: numpy.random.RandomState
@@ -44,11 +49,9 @@ class NPLM(object):
 
         """
 
-        # Since we are dealing with a one hidden layer MLP, this will translate
-        # into a HiddenLayer with a tanh activation function connected to the
-        # LogisticRegression layer; the activation function can be replaced by
-        # sigmoid or any other nonlinear function
-
+        # This first hidden layer
+        # The input is the concatenated word embeddings for all
+        # words in the context input and the batch
         self.h1 = DenseLayer(
             rng=rng,
             input=input,
@@ -57,29 +60,43 @@ class NPLM(object):
             activation=T.nnet.relu
         )
 
+        # Use dropout if specified
+        h2_input = self.h1.output
+        if (use_dropout):
+            assert trng is not None
+            h2_input = dropout_layer(self.h1.output, use_noise,
+                                     trng, dropout_p)
+
+        # The second hidden layer
         self.h2 = DenseLayer(
             rng=rng,
-            input=self.h1.output,
+            input=h2_input,
             n_in=n_h1,
             n_out=n_h2,
             activation=T.nnet.relu
         )
 
+        # Apply dropout if specified
+        log_reg_input = self.h2.output
+        if (use_dropout):
+            log_reg_input = dropout_layer(self.h2.output, use_noise,
+                                          trng, dropout_p)
+
         # The logistic regression layer
         self.log_regression_layer = LogisticRegression(
-            input=self.h2.output,
+            input=log_reg_input,
             n_in=n_h2,
             n_out=n_out
         )
 
-        # Use L1 and L2 regularization
-        #self.L1 = reg.L1([self.h1.W, self.h2.W, self.log_regression_layer.W])
-        #self.L2 = reg.L2([self.h1.W, self.h2.W, self.log_regression_layer.W])
-        # Copy loss and error functions from the logistic regression class
+        # Use L2 regularization, for the log-regression layer only
+        self.L2 = reg.L2([self.log_regression_layer.W])
+        # Get the NLL loss function from the logistic regression layer
         self.loss = self.log_regression_layer.loss
-        #self.errors = self.log_regression_layer.errors
 
+        # Bundle params (to be used for computing gradients)
         self.params = self.h1.params + self.h2.params + \
             self.log_regression_layer.params
 
+        # Keeo track of the input (For debugging only)
         self.input = input

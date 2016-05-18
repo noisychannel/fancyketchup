@@ -26,7 +26,7 @@ class Dict:
             self.worddict[keys[ss]] = idx + 2
 
         self.locked = True
-        self.n_words = n_words + 2
+        self.n_words = len(self.worddict)
 
         print("Total words read by dict = %d" % numpy.sum(counts))
         print("Total unique words read by dict = %d" % len(keys))
