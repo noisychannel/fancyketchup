@@ -6,6 +6,8 @@ import theano
 import theano.tensor as T
 import scipy.optimize
 
+from cutils.numeric import numpy_floatX
+
 
 def sgd(cost, params, learning_rate):
     """
@@ -30,7 +32,7 @@ def sgd(cost, params, learning_rate):
     return updates
 
 
-def new_sgd(lr, tparams, grads, x, mask, y, cost):
+def new_sgd(lr, tparams, grads, cost, *args):
     """
     Implements stochastic gradient descent
     """
@@ -38,7 +40,7 @@ def new_sgd(lr, tparams, grads, x, mask, y, cost):
                for k, p in tparams.items()]
     gsup = [(gs, g) for gs, g in zip(gshared, grads)]
     # Compute gradients but do not update them
-    grad_input = [x, mask, y] if mask is not None else [x, y]
+    grad_input = list(args)
     f_grad_shared = theano.function(grad_input, cost, updates=gsup,
                                     name='sgd_f_grad_shared')
     pup = [(p, p - lr * g) for p, g in zip(tparams.values(), gshared)]
@@ -48,7 +50,7 @@ def new_sgd(lr, tparams, grads, x, mask, y, cost):
     return f_grad_shared, f_update
 
 
-def adadelta(lr, tparams, grads, x, mask, y, cost):
+def adadelta(lr, tparams, grads, cost, *args):
     """
     An adaptive learning rate optimizer
 
@@ -90,10 +92,11 @@ def adadelta(lr, tparams, grads, x, mask, y, cost):
     rg2up = [(rg2, 0.95 * rg2 + 0.05 * (g ** 2))
              for rg2, g in zip(running_grads2, grads)]
 
-    f_grad_shared = theano.function([x, mask, y], cost, updates=zgup + rg2up,
+    grad_input = list(args)
+    f_grad_shared = theano.function(grad_input, cost, updates=zgup + rg2up,
                                     name='adadelta_f_grad_shared')
 
-    updir = [-tensor.sqrt(ru2 + 1e-6) / tensor.sqrt(rg2 + 1e-6) * zg
+    updir = [-T.sqrt(ru2 + 1e-6) / T.sqrt(rg2 + 1e-6) * zg
              for zg, ru2, rg2 in zip(zipped_grads,
                                      running_up2,
                                      running_grads2)]
@@ -108,7 +111,7 @@ def adadelta(lr, tparams, grads, x, mask, y, cost):
     return f_grad_shared, f_update
 
 
-def rmsprop(lr, tparams, grads, x, mask, y, cost):
+def rmsprop(lr, tparams, grads, cost, *args):
     """
     A variant of  SGD that scales the step size by running average of the
     recent step norms.
@@ -154,14 +157,15 @@ def rmsprop(lr, tparams, grads, x, mask, y, cost):
     rg2up = [(rg2, 0.95 * rg2 + 0.05 * (g ** 2))
              for rg2, g in zip(running_grads2, grads)]
 
-    f_grad_shared = theano.function([x, mask, y], cost,
+    grad_input = list(args)
+    f_grad_shared = theano.function(grad_input, cost,
                                     updates=zgup + rgup + rg2up,
                                     name='rmsprop_f_grad_shared')
 
     updir = [theano.shared(p.get_value() * numpy_floatX(0.),
                            name='%s_updir' % k)
              for k, p in tparams.items()]
-    updir_new = [(ud, 0.9 * ud - 1e-4 * zg / tensor.sqrt(rg2 - rg ** 2 + 1e-4))
+    updir_new = [(ud, 0.9 * ud - 1e-4 * zg / T.sqrt(rg2 - rg ** 2 + 1e-4))
                  for ud, zg, rg, rg2 in zip(updir, zipped_grads, running_grads,
                                             running_grads2)]
     param_up = [(p, p + udn[1])

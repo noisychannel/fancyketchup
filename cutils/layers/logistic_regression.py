@@ -44,10 +44,11 @@ class LogisticRegression(object):
         )
 
         # Compute (symbolic) : softmax(x.W + b)
-        self.p_y_given_x = T.nnet.softmax(T.dot(input, self.W) + self.b)
+        self.lin_output = T.dot(input, self.W) + self.b
 
-        # Symbolic prediction (argmax over columns)
-        self.y_pred = T.argmax(self.p_y_given_x, axis=1)
+        # Softmax components computed on demand
+        self.p_y_given_x = None
+        self.y_pred = None
 
         # Params of the model
         self.params = [self.W, self.b]
@@ -62,15 +63,14 @@ class LogisticRegression(object):
         :param y: The true vectors correspoding to the input examples in this
             batch
         """
+        # Compute the softmax on the final layer on demand
+        if self.p_y_given_x is None:
+            self.p_y_given_x = T.nnet.softmax(self.lin_output)
         return negative_log_likelihood(self.p_y_given_x, y)
 
-    def nce_loss(self, p_unnormalized, y, noise_samples, noise_dist):
+    def nce_loss(self, y, noise_samples, noise_dist):
         """
         Returns the binary NCE loss for examples
-
-        :type p_unnormalized: theano.tensor.TensorType
-        :param p_unnormalized: The unnormalized prob distribution (typically
-            a transformation of the final hidden layer)
 
         :type y: theano.tensor.TensorType
         :param y: The true vectors correspoding to the input examples in this
@@ -83,7 +83,7 @@ class LogisticRegression(object):
         :param noise_dist: The noise distribution for NCE
         """
         return nce_binary_conditional_likelihood(
-            p_unnormalized, y, noise_samples, noise_dist)
+            self.lin_output, y, noise_samples, noise_dist)
 
     def errors(self, y):
         """
@@ -93,6 +93,13 @@ class LogisticRegression(object):
         :param y: The true vectors correspoding to the input examples in this
             batch
         """
+        # Compute the softmax on the final layer on demand
+        if self.p_y_given_x is None:
+            self.p_y_given_x = T.nnet.softmax(self.lin_output)
+        # Symbolic prediction (argmax over columns)
+        if self.y_pred is None:
+            self.y_pred = T.argmax(self.p_y_given_x, axis=1)
+
         # Make sure that y has the same dimensionality as y_pred
         if y.ndim != self.y_pred.ndim:
             raise TypeError(

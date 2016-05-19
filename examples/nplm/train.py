@@ -22,7 +22,8 @@ from settimes import SetTimes
 def sgd_optimization_nplm_mlp(learning_rate=1., L1_reg=0.0, L2_reg=0.0001,
                               n_epochs=1000, dataset='../../data/settimes',
                               batch_size=1000, n_in=150, n_h1=750, n_h2=150,
-                              context_size=4):
+                              context_size=4, use_nce=False,
+                              use_dropout=False):
     SEED = 1234
 
     st_data = SetTimes(dataset, emb_dim=n_in)
@@ -41,9 +42,12 @@ def sgd_optimization_nplm_mlp(learning_rate=1., L1_reg=0.0, L2_reg=0.0001,
 
     rng = numpy.random.RandomState(SEED)
     trng = RandomStreams(SEED)
-    use_dropout = False
     dropout_p = 0.5
     use_noise = theano.shared(numpy_floatX(0.))
+
+    nce_q = st_data.noise_distribution
+    nce_k = 100
+    nce_samples = T.imatrix('noise_s')
 
     model = NPLM(
         rng=rng,
@@ -54,22 +58,30 @@ def sgd_optimization_nplm_mlp(learning_rate=1., L1_reg=0.0, L2_reg=0.0001,
         n_out=st_data.dictionary.num_words(),
     )
 
-    # Cost to minimize
-    cost = (
-        model.loss(y)
-        + L2_reg * model.L2
-    )
-
     tparams = OrderedDict()
     for i, nplm_m in enumerate(model.params):
         tparams['nplm_' + str(i)] = nplm_m
     tparams['Wemb'] = st_data.dictionary.Wemb
-    grads = T.grad(cost, wrt=list(tparams.values()))
 
     f_cost = theano.function([x, y], cost, name='f_cost')
 
-    f_grad_shared, f_update = new_sgd(lr, tparams, grads,
-                                      x, None, y, cost)
+    # Cost to minimize
+    if use_nce:
+        cost = model.loss(y, nce_samples, nce_q)
+    else:
+        # MLE via softmax
+        cost = model.loss(y)
+    # Add L2 reg to the cost
+    cost += L2_reg * model.L2
+
+    grads = T.grad(cost, wrt=list(tparams.values()))
+
+    if use_nce:
+        f_grad_shared, f_update = new_sgd(lr, tparams, grads,
+                                          cost, x, y, nce_samples)
+    else:
+        f_grad_shared, f_update = new_sgd(lr, tparams, grads,
+                                          cost, x, y)
 
     print("... Optimization")
     kf_valid = get_minibatches_idx(len(valid[0]), batch_size)
@@ -91,21 +103,31 @@ def sgd_optimization_nplm_mlp(learning_rate=1., L1_reg=0.0, L2_reg=0.0001,
             uidx += 1
             use_noise.set_value(1.)
 
-            x = [train[0][t] for t in train_index]
-            y = [train[1][t] for t in train_index]
+            x_batch = [train[0][t] for t in train_index]
+            y_batch = [train[1][t] for t in train_index]
             # Convert x and y into numpy objects
-            x = numpy.asarray(x, dtype='int32')
-            y = numpy.asarray(y, dtype='int32')
+            x_batch = numpy.asarray(x_batch, dtype='int32')
+            y_batch = numpy.asarray(y_batch, dtype='int32')
 
-            cost = f_grad_shared(x, y)
+            if use_nce:
+                # Create noise samples to be passed as well
+                # Expected size is (bs, k)
+                # Don't sample UNK and PAD
+                noisy_samples = numpy.random.randint(
+                    2, st_data.dictionary.num_words(),
+                    size=(x_batch.shape[0], nce_k)
+                )
+                loss = f_grad_shared(x_batch, y_batch, noisy_samples)
+            else:
+                loss = f_grad_shared(x_batch, y_batch)
             f_update(learning_rate)
 
-            if numpy.isnan(cost) or numpy.isinf(cost):
+            if numpy.isnan(loss) or numpy.isinf(loss):
                 print('bad cost detected: ', cost)
                 return 1., 1.
 
             if numpy.mod(uidx, disp_freq) == 0:
-                print('Epoch', eidx, 'Update', uidx, 'Cost', cost)
+                print('Epoch', eidx, 'Update', uidx, 'Cost', loss)
 
 if __name__ == '__main__':
     sgd_optimization_nplm_mlp(dataset=sys.argv[1])
