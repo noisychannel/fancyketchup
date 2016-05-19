@@ -57,7 +57,7 @@ def binary_cross_entropy_loss(true_value, p_true_value):
 
 
 def nce_binary_conditional_likelihood(p_unnormalized, y,
-                                      noise_samples, noise_dist, k):
+                                      noise_samples, noise_dist):
     """
     \sum_{w \in batch} [
         \frac{u(w)}{u(w) + k * q(w)}
@@ -76,9 +76,9 @@ def nce_binary_conditional_likelihood(p_unnormalized, y,
     p_class1 = T.log(unnorm_y / (unnorm_y + k * noise_y))
     noise_other_samples = noise_dist[noise_samples]
     unnorm_noise_samples = p_unnormalized[T.arange(noise_samples.shape[0])
-                                          .reshape(noise_samples[0], 1),
+                                          .dimshuffle(0, 'x'),
                                           noise_samples]
     p_class_0 = T.sum(T.log((k * noise_other_samples) /
                             (unnorm_noise_samples + k * noise_other_samples)),
                       axis=1)
-    return -T.mean(p_class1 + p_class_0)
+    return -T.mean(p_class1 + p_class_0, dtype=theano.config.floatX)

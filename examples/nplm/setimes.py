@@ -9,7 +9,7 @@ from cutils.dict import Dict
 from cutils.numeric import numpy_floatX
 
 
-class SetTimes(DataInterface):
+class SeTimes(DataInterface):
     def __init__(self, dataset_path, n_words=100000, emb_dim=100):
         self.dataset_path = dataset_path
         if os.path.isfile(os.getcwd() + "/" + dataset_path):

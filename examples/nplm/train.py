@@ -16,17 +16,17 @@ script_path = os.path.dirname(os.path.realpath(__file__))
 sys.path.append(script_path)
 
 from nplm import NPLM
-from settimes import SetTimes
+from setimes import SeTimes
 
 
 def sgd_optimization_nplm_mlp(learning_rate=1., L1_reg=0.0, L2_reg=0.0001,
                               n_epochs=1000, dataset='../../data/settimes',
                               batch_size=1000, n_in=150, n_h1=750, n_h2=150,
-                              context_size=4, use_nce=False,
-                              use_dropout=False):
+                              context_size=4, use_nce=False, nce_k=100,
+                              use_dropout=False, dropout_p=0.5):
     SEED = 1234
 
-    st_data = SetTimes(dataset, emb_dim=n_in)
+    st_data = SeTimes(dataset, emb_dim=n_in)
     print("... Creating the partitions")
     train, valid = st_data.load_data(context_size=context_size)
     print("... Done creating partitions")
@@ -42,11 +42,9 @@ def sgd_optimization_nplm_mlp(learning_rate=1., L1_reg=0.0, L2_reg=0.0001,
 
     rng = numpy.random.RandomState(SEED)
     trng = RandomStreams(SEED)
-    dropout_p = 0.5
     use_noise = theano.shared(numpy_floatX(0.))
 
-    nce_q = st_data.noise_distribution
-    nce_k = 100
+    nce_q = st_data.dictionary.noise_distribution
     nce_samples = T.imatrix('noise_s')
 
     model = NPLM(
@@ -56,14 +54,13 @@ def sgd_optimization_nplm_mlp(learning_rate=1., L1_reg=0.0, L2_reg=0.0001,
         n_h1=n_h1,
         n_h2=n_h2,
         n_out=st_data.dictionary.num_words(),
+        use_nce=use_nce
     )
 
     tparams = OrderedDict()
     for i, nplm_m in enumerate(model.params):
         tparams['nplm_' + str(i)] = nplm_m
     tparams['Wemb'] = st_data.dictionary.Wemb
-
-    f_cost = theano.function([x, y], cost, name='f_cost')
 
     # Cost to minimize
     if use_nce:
@@ -77,9 +74,11 @@ def sgd_optimization_nplm_mlp(learning_rate=1., L1_reg=0.0, L2_reg=0.0001,
     grads = T.grad(cost, wrt=list(tparams.values()))
 
     if use_nce:
+        f_cost = theano.function([x, y, nce_samples], cost, name='f_cost')
         f_grad_shared, f_update = new_sgd(lr, tparams, grads,
                                           cost, x, y, nce_samples)
     else:
+        f_cost = theano.function([x, y], cost, name='f_cost')
         f_grad_shared, f_update = new_sgd(lr, tparams, grads,
                                           cost, x, y)
 
@@ -115,7 +114,7 @@ def sgd_optimization_nplm_mlp(learning_rate=1., L1_reg=0.0, L2_reg=0.0001,
                 # Don't sample UNK and PAD
                 noisy_samples = numpy.random.randint(
                     2, st_data.dictionary.num_words(),
-                    size=(x_batch.shape[0], nce_k)
+                    size=(x_batch.shape[0], nce_k), dtype='int32'
                 )
                 loss = f_grad_shared(x_batch, y_batch, noisy_samples)
             else:
@@ -123,11 +122,11 @@ def sgd_optimization_nplm_mlp(learning_rate=1., L1_reg=0.0, L2_reg=0.0001,
             f_update(learning_rate)
 
             if numpy.isnan(loss) or numpy.isinf(loss):
-                print('bad cost detected: ', cost)
+                print('bad cost detected: ', loss)
                 return 1., 1.
 
             if numpy.mod(uidx, disp_freq) == 0:
                 print('Epoch', eidx, 'Update', uidx, 'Cost', loss)
 
 if __name__ == '__main__':
-    sgd_optimization_nplm_mlp(dataset=sys.argv[1])
+    sgd_optimization_nplm_mlp(dataset=sys.argv[1], use_nce=True)

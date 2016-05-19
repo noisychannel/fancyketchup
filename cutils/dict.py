@@ -26,11 +26,12 @@ class Dict:
         for idx, ss in enumerate(sorted_idx):
             self.worddict[keys[ss]] = idx + 2
 
+        self.n_words = len(self.worddict)
+
         self.noise_distribution = None
         self.create_unigram_noise_dist(wordcount, n_words)
 
         self.locked = True
-        self.n_words = len(self.worddict)
 
         print("Total words read by dict = %d" % numpy.sum(counts))
         print("Total unique words read by dict = %d" % len(keys))
@@ -43,11 +44,12 @@ class Dict:
 
     def create_unigram_noise_dist(self, wordcount, n_words):
         counts = numpy.sort(wordcount.values())[::-1]
-        freq = [0, sum(counts[n_words:])] + list(counts[n_words:])
+        freq = [0, sum(counts[n_words:])] + list(counts[:n_words])
+        assert len(freq) == self.n_words
         sum_freq = sum(freq)
         noise_distribution = [float(k) / sum_freq for k in freq]
         self.noise_distribution = init_tparams(
-            OrderedDict(['noise_d', numpy_floatX(noise_distribution)])
+            OrderedDict([('noise_d', numpy_floatX(noise_distribution))])
         )['noise_d']
 
     def initialize_embedding(self):
