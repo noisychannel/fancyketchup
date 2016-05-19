@@ -54,3 +54,31 @@ def binary_cross_entropy_loss(true_value, p_true_value):
     """
     return -T.sum(true_value * T.log(p_true_value)
                   + (1 - true_value) * T.log(1 - p_true_value), axis=1)
+
+
+def nce_binary_conditional_likelihood(p_unnormalized, y,
+                                      noise_samples, noise_dist, k):
+    """
+    \sum_{w \in batch} [
+        \frac{u(w)}{u(w) + k * q(w)}
+        + \sum{\hat{w} \from q} [
+            \frac{k * q(\hat{w})}{u(\hat{w}) + k * q(\hat{w})}
+        ]
+    ]
+    q() is the noise distribution
+    u() is the unnormalized probability
+    \hat{w} ~ q()
+    k is the number of noise samples
+    """
+    k = noise_samples.shape[1]
+    unnorm_y = p_unnormalized[T.arange(y.shape[0]), y]
+    noise_y = noise_dist[y]
+    p_class1 = T.log(unnorm_y / (unnorm_y + k * noise_y))
+    noise_other_samples = noise_dist[noise_samples]
+    unnorm_noise_samples = p_unnormalized[T.arange(noise_samples.shape[0])
+                                          .reshape(noise_samples[0], 1),
+                                          noise_samples]
+    p_class_0 = T.sum(T.log((k * noise_other_samples) /
+                            (unnorm_noise_samples + k * noise_other_samples)),
+                      axis=1)
+    return -T.mean(p_class1 + p_class_0)

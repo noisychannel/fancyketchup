@@ -26,7 +26,8 @@ class NPLM(object):
 
     def __init__(self, rng, input, n_in, n_h1, n_h2, n_out,
                  use_dropout=False, trng=None, dropout_p=0.5,
-                 use_noise=theano.shared(numpy_floatX(0.))):
+                 use_noise=theano.shared(numpy_floatX(0.)),
+                 use_nce=False):
         """Initialize the parameters for the multilayer perceptron
 
         :type rng: numpy.random.RandomState
@@ -92,7 +93,10 @@ class NPLM(object):
         # Use L2 regularization, for the log-regression layer only
         self.L2 = reg.L2([self.log_regression_layer.W])
         # Get the NLL loss function from the logistic regression layer
-        self.loss = self.log_regression_layer.loss
+        if use_nce:
+            self.loss = self.log_regression_layer.nce_loss
+        else:
+            self.loss = self.log_regression_layer.loss
 
         # Bundle params (to be used for computing gradients)
         self.params = self.h1.params + self.h2.params + \

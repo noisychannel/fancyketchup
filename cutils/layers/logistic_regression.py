@@ -2,7 +2,8 @@ import theano
 import theano.tensor as T
 import numpy
 
-from cutils.loss_functions import negative_log_likelihood, zero_one_loss
+from cutils.loss_functions import negative_log_likelihood, zero_one_loss, \
+    nce_binary_conditional_likelihood
 
 
 class LogisticRegression(object):
@@ -62,6 +63,27 @@ class LogisticRegression(object):
             batch
         """
         return negative_log_likelihood(self.p_y_given_x, y)
+
+    def nce_loss(self, p_unnormalized, y, noise_samples, noise_dist):
+        """
+        Returns the binary NCE loss for examples
+
+        :type p_unnormalized: theano.tensor.TensorType
+        :param p_unnormalized: The unnormalized prob distribution (typically
+            a transformation of the final hidden layer)
+
+        :type y: theano.tensor.TensorType
+        :param y: The true vectors correspoding to the input examples in this
+            batch
+
+        :type noise_samples: theano.tensor.TensorType
+        :param noise_samples: The noisy samples drawn from the vocab
+
+        :type noise_dist: theano.tensor.TensorType
+        :param noise_dist: The noise distribution for NCE
+        """
+        return nce_binary_conditional_likelihood(
+            p_unnormalized, y, noise_samples, noise_dist)
 
     def errors(self, y):
         """
