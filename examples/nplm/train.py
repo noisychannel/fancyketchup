@@ -35,7 +35,9 @@ def sgd_optimization_nplm_mlp(learning_rate=1., L1_reg=0.0, L2_reg=0.0001,
     # Symbolic variables for input and output for a batch
     x = T.imatrix('x')
     y = T.ivector('y')
+    y_flat = T.ivector('y_flat')
     lr = T.scalar(name='lr')
+    k = T.scalar(name='k')
 
     emb_x = st_data.dictionary.Wemb[x.flatten()] \
         .reshape([x.shape[0], context_size * n_in])
@@ -45,7 +47,7 @@ def sgd_optimization_nplm_mlp(learning_rate=1., L1_reg=0.0, L2_reg=0.0001,
     use_noise = theano.shared(numpy_floatX(0.))
 
     nce_q = st_data.dictionary.noise_distribution
-    nce_samples = T.imatrix('noise_s')
+    nce_samples = T.matrix('noise_s')
 
     model = NPLM(
         rng=rng,
@@ -64,7 +66,8 @@ def sgd_optimization_nplm_mlp(learning_rate=1., L1_reg=0.0, L2_reg=0.0001,
 
     # Cost to minimize
     if use_nce:
-        cost = model.loss(y, nce_samples, nce_q)
+        #cost = model.loss(y, nce_samples, nce_q)
+        cost = model.loss(y, y_flat, nce_samples, nce_q, k)
     else:
         # MLE via softmax
         cost = model.loss(y)
@@ -74,9 +77,10 @@ def sgd_optimization_nplm_mlp(learning_rate=1., L1_reg=0.0, L2_reg=0.0001,
     grads = T.grad(cost, wrt=list(tparams.values()))
 
     if use_nce:
-        f_cost = theano.function([x, y, nce_samples], cost, name='f_cost')
+        f_cost = theano.function([x, y, y_flat, nce_samples, k],
+                                 cost, name='f_cost')
         f_grad_shared, f_update = new_sgd(lr, tparams, grads,
-                                          cost, x, y, nce_samples)
+                                          cost, x, y, y_flat, nce_samples, k)
     else:
         f_cost = theano.function([x, y], cost, name='f_cost')
         f_grad_shared, f_update = new_sgd(lr, tparams, grads,
@@ -94,6 +98,7 @@ def sgd_optimization_nplm_mlp(learning_rate=1., L1_reg=0.0, L2_reg=0.0001,
     uidx = 0
     estop = False
     start_time = time.time()
+    total_output_words = st_data.dictionary.num_words()
     for eidx in range(n_epochs):
         n_samples = 0
         # Shuffle and get training stuff
@@ -104,19 +109,32 @@ def sgd_optimization_nplm_mlp(learning_rate=1., L1_reg=0.0, L2_reg=0.0001,
 
             x_batch = [train[0][t] for t in train_index]
             y_batch = [train[1][t] for t in train_index]
+            y_f_batch = [train[1][t] + i * st_data.dictionary.num_words()
+                         for i, t in enumerate(train_index)]
             # Convert x and y into numpy objects
             x_batch = numpy.asarray(x_batch, dtype='int32')
             y_batch = numpy.asarray(y_batch, dtype='int32')
+            y_f_batch = numpy.asarray(y_f_batch, dtype='int32')
 
+            local_batch_size = x_batch.shape[0]
             if use_nce:
                 # Create noise samples to be passed as well
                 # Expected size is (bs, k)
                 # Don't sample UNK and PAD
-                noisy_samples = numpy.random.randint(
-                    2, st_data.dictionary.num_words(),
-                    size=(x_batch.shape[0], nce_k), dtype='int32'
-                )
-                loss = f_grad_shared(x_batch, y_batch, noisy_samples)
+                noisy_samples = numpy.zeros((local_batch_size,
+                                             st_data.dictionary.num_words()),
+                                            dtype='float32')
+                # The following will mask approximately (repeats permitted) 100
+                # values with the value 1. This represents the noise samples in
+                # the vocab
+                noisy_samples[
+                    numpy.arange(local_batch_size).reshape(local_batch_size,
+                                                           1),
+                    numpy.random.randint(2, total_output_words,
+                                         size=(local_batch_size, nce_k))
+                ] = 1.
+                loss = f_grad_shared(x_batch, y_batch, y_f_batch,
+                                     noisy_samples, nce_k)
             else:
                 loss = f_grad_shared(x_batch, y_batch)
             f_update(learning_rate)
@@ -127,6 +145,12 @@ def sgd_optimization_nplm_mlp(learning_rate=1., L1_reg=0.0, L2_reg=0.0001,
 
             if numpy.mod(uidx, disp_freq) == 0:
                 print('Epoch', eidx, 'Update', uidx, 'Cost', loss)
+
+
+    end_time = time.time()
+    print('Training took %.1fs' % (end_time - start_time))
+    f_grad_shared.profile.print_summary()
+
 
 if __name__ == '__main__':
     sgd_optimization_nplm_mlp(dataset=sys.argv[1], use_nce=True)

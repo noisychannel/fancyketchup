@@ -49,7 +49,8 @@ class Dict:
         sum_freq = sum(freq)
         noise_distribution = [float(k) / sum_freq for k in freq]
         self.noise_distribution = init_tparams(
-            OrderedDict([('noise_d', numpy_floatX(noise_distribution))])
+            OrderedDict([('noise_d', numpy_floatX(noise_distribution)
+                          .reshape(self.n_words,))])
         )['noise_d']
 
     def initialize_embedding(self):
