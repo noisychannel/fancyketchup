@@ -2,9 +2,9 @@ import theano
 import theano.tensor as T
 from theano.tensor.shared_randomstreams import RandomStreams
 
-from cutils.hidden_layer import HiddenLayer
-from cutils.logistic_regression import LogisticRegression
-from cutils.trainer import sgd
+from cutils.layers.dense_layer import DenseLayer
+from cutils.layers.logistic_regression import LogisticRegression
+from cutils.training.trainer import simple_sgd
 from autoencoder import AutoEncoder
 
 
@@ -80,7 +80,7 @@ class SdA(object):
             else:
                 layer_input = self.sigmoid_layers[-1].output
 
-            sigmoid_layer = HiddenLayer(
+            sigmoid_layer = DenseLayer(
                 rng=numpy_rng,
                 input=layer_input,
                 n_in=input_size,
@@ -147,7 +147,7 @@ class SdA(object):
         pretrain_fns = []
         for dA in self.dA_layers:
             cost = dA.loss(corruption_level)
-            updates = sgd(cost, dA.params, learning_rate)
+            updates = simple_sgd(cost, dA.params, learning_rate)
             fn = theano.function(
                 inputs=[
                     index,
@@ -216,7 +216,7 @@ class SdA(object):
         )
 
         # Stochastic Gradient descent
-        updates = sgd(self.fine_tune_cost, self.params, learning_rate)
+        updates = simple_sgd(self.fine_tune_cost, self.params, learning_rate)
 
         train_model = theano.function(
             inputs=[index],

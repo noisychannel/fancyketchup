@@ -1,5 +1,5 @@
 import numpy
-from data_utils import scale_to_unit_interval
+from cutils.data_interface.utils import scale_to_unit_interval
 
 
 def tile_raster_images(X, img_shape, tile_shape, tile_spacing=(0, 0),

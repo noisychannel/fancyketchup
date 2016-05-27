@@ -3,8 +3,8 @@ import theano
 import theano.tensor as T
 from theano.tensor.shared_randomstreams import RandomStreams
 
-from cutils.init import xavier_init
-from cutils.data_utils import mask_input
+from cutils.params.init import xavier_init
+from cutils.layers.utils import mask_input
 from cutils.loss_functions import binary_cross_entropy_loss as xent
 
 

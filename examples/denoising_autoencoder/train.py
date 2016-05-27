@@ -9,9 +9,9 @@ import numpy
 import timeit
 from PIL import Image
 
-from cutils.trainer import sgd
+from cutils.training.trainer import simple_sgd
 from cutils.numeric import numpy_floatX
-from cutils.utils import tile_raster_images
+from cutils.image.utils import tile_raster_images
 
 # Include current path in the pythonpath
 script_path = os.path.dirname(os.path.realpath(__file__))
@@ -88,7 +88,7 @@ def sgd_optimization_mnist_da(learning_rate=0.1, n_epochs=15,
         cost = da.loss(corruption_level=corruption_level)
 
         # Stochastic Gradient descent
-        updates = sgd(cost, da.params, learning_rate)
+        updates = simple_sgd(cost, da.params, learning_rate)
 
         train_da = theano.function(
             inputs=[index],
@@ -131,7 +131,6 @@ def sgd_optimization_mnist_da(learning_rate=0.1, n_epochs=15,
     sgd_da(0.)
     # Train a model with 30% corruption
     sgd_da(0.3)
-
 
 
 if __name__ == '__main__':
