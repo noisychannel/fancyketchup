@@ -4,7 +4,6 @@ import theano.tensor as T
 import cutils.regularization as reg
 from cutils.layers.dense_layer import DenseLayer
 from cutils.layers.logistic_regression import LogisticRegression
-from cutils.layers.logistic_regression import LogisticRegression
 
 # Include logistic_regressioncurrent path in the pythonpath
 script_path = os.path.dirname(os.path.realpath(__file__))
