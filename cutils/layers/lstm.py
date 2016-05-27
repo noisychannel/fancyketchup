@@ -1,8 +1,10 @@
 import numpy
 import theano
 import theano.tensor as T
+from collections import OrderedDict
 
 from cutils.params.init import ortho_weight
+from cutils.params.utils import init_tparams
 from cutils.numeric import numpy_floatX
 
 
@@ -12,19 +14,19 @@ class LSTM(object):
         Initialize the LSTM params
         """
         self.param_names = []
-        params = []
-        W = numpy.concatenate([ortho_weight(dim_proj, rng),
-                               ortho_weight(dim_proj, rng),
-                               ortho_weight(dim_proj, rng),
-                               ortho_weight(dim_proj, rng)], axis=1)
+        params = OrderedDict()
+        W = numpy.concatenate([ortho_weight(dim_proj),
+                               ortho_weight(dim_proj),
+                               ortho_weight(dim_proj),
+                               ortho_weight(dim_proj)], axis=1)
         params[_p(prefix, 'W')] = W
         self.param_names.append(_p(prefix, 'W'))
 
         # TODO: why is the axis 1, figure out
-        U = numpy.concatenate([ortho_weight(dim_proj, rng),
-                               ortho_weight(dim_proj, rng),
-                               ortho_weight(dim_proj, rng),
-                               ortho_weight(dim_proj, rng)], axis=1)
+        U = numpy.concatenate([ortho_weight(dim_proj),
+                               ortho_weight(dim_proj),
+                               ortho_weight(dim_proj),
+                               ortho_weight(dim_proj)], axis=1)
         params[_p(prefix, 'U')] = U
         self.param_names.append(_p(prefix, 'U'))
 
@@ -34,7 +36,7 @@ class LSTM(object):
 
         self.prefix = prefix
         self.params = params
-        self.tparams = []
+        self.tparams = init_tparams(params)
 
     def set_tparams(self, tparams):
         for p in self.param_names:
@@ -63,8 +65,8 @@ class LSTM(object):
             preact += x_
 
             i = T.nnet.sigmoid(_slice(preact, 0, dim_proj))
-            f = T.nnet.signoid(_slice(preact, 1, dim_proj))
-            o = T.nnet.signoid(_slice(preact, 2, dim_proj))
+            f = T.nnet.sigmoid(_slice(preact, 1, dim_proj))
+            o = T.nnet.sigmoid(_slice(preact, 2, dim_proj))
             c = T.tanh(_slice(preact, 3, dim_proj))
             c = f * c_ + i * c
             c = m_[:, None] * c + (1. - m_)[:, None] * c_

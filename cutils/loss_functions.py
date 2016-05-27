@@ -5,7 +5,6 @@ A collection of loss functions for use with Theano
 import theano
 import theano.tensor as T
 
-from cutils.regularization import L1, L2
 from cutils.numeric import safe_log
 
 

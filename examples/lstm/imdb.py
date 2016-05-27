@@ -3,11 +3,12 @@ import os
 import glob
 
 from cutils.data_interface.interface import DataInterface
+import cutils.data_interface.utils as du
 from cutils.dict import Dict
 
 
 class IMDB(DataInterface):
-    def __init__(self, dataset_path, origin=None, n_words=100000):
+    def __init__(self, dataset_path, origin=None, n_words=100000, emb_dim=100):
         self.dataset_path = dataset_path
         self.origin = origin
         # Download the dataset if it does not exist
@@ -15,10 +16,12 @@ class IMDB(DataInterface):
             self.dataset_path = os.getcwd() + "/" + dataset_path
         if not os.path.isdir(dataset_path):
             if origin is not None:
-                DataInterface.download_dataset(dataset_path, origin)
+                du.download_dataset(dataset_path, origin)
             else:
-                raise Exception('Dataset not found and the origin was not specified')
+                raise Exception('Dataset not found and the origin \
+                    was not specified')
         # Create dictionary
+        self.embedding_dimension = emb_dim
         self.dictionary = None
         print("... Building dictionary")
         self.build_dict(n_words)
@@ -52,21 +55,21 @@ class IMDB(DataInterface):
 
         valid_set = ([], [])
         if valid_portion > 0.:
-            train_set, valid_set = DataInterface.create_subset(train_set, valid_portion)
+            train_set, valid_set = du.create_subset(train_set, valid_portion)
 
         train_set_x, train_set_y = train_set
         valid_set_x, valid_set_y = valid_set
         test_set_x, test_set_y = test_set
         if sort_by_len:
-            sorted_index = DataInterface.len_argsort(test_set_x)
+            sorted_index = du.len_argsort(test_set_x)
             test_set_x = [test_set_x[i] for i in sorted_index]
             test_set_y = [test_set_y[i] for i in sorted_index]
 
-            sorted_index = DataInterface.len_argsort(valid_set_x)
+            sorted_index = du.len_argsort(valid_set_x)
             valid_set_x = [valid_set_x[i] for i in sorted_index]
             valid_set_y = [valid_set_y[i] for i in sorted_index]
 
-            sorted_index = DataInterface.len_argsort(train_set_x)
+            sorted_index = du.len_argsort(train_set_x)
             train_set_x = [train_set[0][i] for i in sorted_index]
             train_set_y = [train_set[1][i] for i in sorted_index]
 
@@ -88,8 +91,8 @@ class IMDB(DataInterface):
             with open(ff, 'r') as f:
                 sentences.append(f.readline().strip())
         os.chdir(currdir)
-        sentences = DataInterface.tokenize(sentences)
-        sentences = DataInterface.lowercase(sentences)
+        sentences = du.tokenize(sentences)
+        sentences = du.lowercase(sentences)
         seqs = [None] * len(sentences)
         for idx, ss in enumerate(sentences):
                 seqs[idx] = self.dictionary.read_sentence(ss)
@@ -107,9 +110,9 @@ class IMDB(DataInterface):
             with open(ff, 'r') as f:
                 sentences.append(f.readline().strip())
         os.chdir(currdir)
-        sentences = DataInterface.tokenize(sentences)
-        sentences = DataInterface.lowercase(sentences)
-        self.dictionary = Dict(sentences, n_words)
+        sentences = du.tokenize(sentences)
+        sentences = du.lowercase(sentences)
+        self.dictionary = Dict(sentences, n_words, self.embedding_dimension)
 
     def get_dataset_file(self):
         """Download file if it does not exist"""

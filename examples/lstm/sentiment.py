@@ -29,27 +29,34 @@ def _p(pp, name):
     return '%s_%s' % (pp, name)
 
 
-def init_params(options):
+def init_params(dim_proj, ydim, word_dict):
     """
     Embedding and classifier params
     """
+    def unpack(source, target):
+        for kk, vv in source.items():
+            target[kk] = vv
+
     rng = numpy.random.RandomState(SEED)
     params = OrderedDict()
-    # Embedding
-    # TODO:These params can be auto initialized, via dicts
-    randn = numpy.random.rand(options['n_words'],
-                              options['dim_proj'])
-    params['Wemb'] = (0.01 * randn).astype(theano.config.floatX)
-    # Initialize the LSTM
-    layers['lstm'] = LSTM(options['dim_proj'], rng)
-    # Track the LSTM params
-    params += layers['lstm'].params
-
-    params['U'] = 0.01 * numpy.random.randn(options['dim_proj'],
-                                            options['ydim']) \
+    tparams = OrderedDict()
+    # Add parameters from dictionary
+    unpack(word_dict.params, params)
+    unpack(word_dict.tparams, tparams)
+    # Initialize LSTM and add its params
+    layers['lstm'] = LSTM(dim_proj, rng)
+    unpack(layers['lstm'].params, params)
+    unpack(layers['lstm'].tparams, tparams)
+    # Initialize other params
+    other_params = OrderedDict()
+    other_params['U'] = 0.01 * numpy.random.randn(dim_proj, ydim) \
         .astype(theano.config.floatX)
-    params['b'] = numpy.zeros((options['ydim'],)).astype(theano.config.floatX)
-    return params
+    other_params['b'] = numpy.zeros((ydim,)).astype(theano.config.floatX)
+    other_tparams = init_tparams(other_params)
+    unpack(other_params, params)
+    unpack(other_tparams, tparams)
+
+    return params, tparams
 
 
 def build_model(tparams, options):
@@ -135,7 +142,7 @@ def train_lstm(
     decay_c=0.,
     lrate=0.0001,
     n_words=10000,
-    optimizer='adadelta',
+    optimizer='sgd',
     encoder='lstm',
     save_to='lstm_model.npz',
     valid_freq=370,
@@ -143,7 +150,7 @@ def train_lstm(
     maxlen=100,
     batch_size=16,
     valid_batch_size=64,
-    dataset='imdb',
+    dataset='../../data/aclImdb',
     noise_std=0.,
     use_dropout=True,
     reload_model=None,
@@ -152,7 +159,8 @@ def train_lstm(
     model_options = locals().copy()
     print("model options", model_options)
 
-    imdb_data = imdb.IMDB(dataset, n_words=n_words)
+    imdb_data = imdb.IMDB(dataset, n_words=n_words,
+                          emb_dim=model_options['dim_proj'])
     train, valid, test = imdb_data.load_data(valid_portion=0.5, maxlen=maxlen)
 
     if test_size > 0:
@@ -167,15 +175,15 @@ def train_lstm(
 
     print('Building model')
     # Create the initial parameters for the model
-    params = init_params(model_options)
+    params, tparams = init_params(model_options['dim_proj'], ydim,
+                                  imdb_data.dictionary)
 
     if reload_model:
         load_params('lstm_model.npz', params)
+        # Update the tparams with the new values
+        zipp(params, tparams)
 
     # Create the shared variables for the model
-    tparams = init_tparams(params)
-    # There should be a better way to do this
-    layers['lstm'].set_tparams(tparams)
     (use_noise, x, mask,
      y, f_pred_prob, f_pred, cost) = build_model(tparams, model_options)
 

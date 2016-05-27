@@ -39,7 +39,7 @@ def sgd_optimization_nplm_mlp(learning_rate=1., L1_reg=0.0, L2_reg=0.0001,
     lr = T.scalar(name='lr')
     k = T.scalar(name='k')
 
-    emb_x = st_data.dictionary.Wemb[x.flatten()] \
+    emb_x = st_data.dictionary.tparams['Wemb'][x.flatten()] \
         .reshape([x.shape[0], context_size * n_in])
 
     rng = numpy.random.RandomState(SEED)

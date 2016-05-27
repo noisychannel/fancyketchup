@@ -57,9 +57,11 @@ def scale_to_unit_interval(ndar, eps=1e-8):
 def tokenize(sentences, lang="en"):
     # download the tokenizer if it does not exist
     cdir = os.path.dirname(__file__)
-    tok_origin = "https://raw.githubusercontent.com/moses-smt/mosesdecoder/master/scripts/tokenizer/tokenizer.perl"
-    tok_dest = os.path.join(cdir, "../scripts/tokenizer")
-    prefix_origin = "https://raw.githubusercontent.com/moses-smt/mosesdecoder/master/scripts/share/nonbreaking_prefixes"
+    tok_origin = "https://raw.githubusercontent.com/moses-smt/mosesdecoder/" \
+        "master/scripts/tokenizer/tokenizer.perl"
+    tok_dest = os.path.join(cdir, "../../scripts/tokenizer")
+    prefix_origin = "https://raw.githubusercontent.com/moses-smt/mosesdecoder" \
+        "/master/scripts/share/nonbreaking_prefixes"
     prefix_dest = os.path.join(cdir, "../share/nonbreaking_prefixes")
     if not os.path.isfile(tok_dest):
         print('downloading the tokenizer script')
@@ -75,17 +77,20 @@ def tokenize(sentences, lang="en"):
             pass
         try:
             print('downloading the non-breaking prefix file')
-            urllib.request.urlretrieve(prefix_origin + "/nonbreaking_prefix." + lang,
-                                       prefix_dest + "/nonbreaking_prefix." + lang)
+            urllib.request.urlretrieve(
+                prefix_origin + "/nonbreaking_prefix." + lang,
+                prefix_dest + "/nonbreaking_prefix." + lang
+            )
         except urllib.error.urlerror, e:
-            #todo: this exception does not get triggered
-            # an empty file is created instead which contains the phrase "not found"
+            # TODO: this exception does not get triggered
+            # an empty file is created instead which contains the
+            # phrase "not found"
             if e.code == 404:
-                print('the prefix file for the lang %s could not be downloaded' % lang)
+                print('the prefix file for the lang %s could not be downloaded'
+                      % lang)
             else:
                 print('an unknown error occured while trying to download the prefix \
                        file for the lang %s' % lang)
-
 
     tokenizer_cmd = [tok_dest, '-l', 'en', '-q', '-']
     print('tokenizing...')
@@ -97,14 +102,18 @@ def tokenize(sentences, lang="en"):
 
     return toks
 
+
 def lowercase(sentences):
     return [s.lower() for s in sentences]
+
 
 def remove_unk(x, n_words):
     return [[1 if w >= n_words else w for w in sen] for sen in x]
 
+
 def len_argsort(seq):
     return sorted(range(len(seq)), key=lambda x: len(seq[x]))
+
 
 def download_dataset(dataset_path, origin):
     from six.moves import urllib
@@ -113,6 +122,7 @@ def download_dataset(dataset_path, origin):
         urllib.request.urlretrieve(origin, dataset_path)
     except:
         raise Exception("could not download the dataset from %s" % origin)
+
 
 def create_subset(whole, small_portion, shuffle=True):
     whole_x, whole_y = whole

@@ -1,13 +1,38 @@
+from __future__ import print_function
+from collections import OrderedDict
+
 import numpy
 import theano
-from collections import OrderedDict
 
 from cutils.params.utils import init_tparams
 from cutils.numeric import numpy_floatX
 
 
-class Dict:
+class Dict(object):
+    """
+    The dictionary is responsible for reading text and converting them into
+    integer tokens (creating a vocabulary).
+    It will also initialize random word embeddings.
+
+    Helper functions are available to get unigram noise distributions for the
+    vocabulary (to be used with NCE).
+    """
     def __init__(self, sentences, n_words, emb_dim):
+        """
+        Initializes a dictionary.
+
+        :type sentences: list(strings)
+        :param sentences: A list of sentences (text) to
+            initialize the vocabulary
+
+        :type n_words : int
+        :param n_words : The number of words to retain in the vocab. Less
+            frequent words that are below this threshold will be replaced
+            with UNK
+
+        :type emb_dim: int
+        :param emb_dim: The dimension for the word embeddings
+        """
         self.locked = False
         wordcount = dict()
         for ss in sentences:
@@ -29,7 +54,7 @@ class Dict:
         self.n_words = len(self.worddict)
 
         self.noise_distribution = None
-        self.create_unigram_noise_dist(wordcount, n_words)
+        self.create_unigram_noise_dist(wordcount)
 
         self.locked = True
 
@@ -38,13 +63,24 @@ class Dict:
         print("Total words retained = %d" % len(self.worddict))
 
         self.embedding_size = emb_dim
-        self.rng = None
-        self.Wemb = None
-        self.initialize_embedding()
+        # TODO: Remove self.Wemb at some point, it should be part of params
+        Wemb = self.initialize_embedding()
+        params = OrderedDict()
+        params['Wemb'] = Wemb
+        self.params = params
+        self.tparams = init_tparams(params)
 
-    def create_unigram_noise_dist(self, wordcount, n_words):
+    def create_unigram_noise_dist(self, wordcount):
+        """
+        Creates a Unigram noise distribution for NCE
+
+        :type wordcount: dict
+        :param wordcount: A dictionary containing frequency counts for words
+        """
         counts = numpy.sort(wordcount.values())[::-1]
-        freq = [0, sum(counts[n_words:])] + list(counts[:n_words])
+        # Don't count the UNK and PAD symbols in the second count
+        freq = [0, sum(counts[self.n_words:])] \
+            + list(counts[:(self.n_words-2)])
         assert len(freq) == self.n_words
         sum_freq = sum(freq)
         noise_distribution = [float(k) / sum_freq for k in freq]
@@ -54,19 +90,26 @@ class Dict:
         )['noise_d']
 
     def initialize_embedding(self):
+        """
+        Initializes the word embeddings from a uniform distribution
+        """
+        # TODO: Which random seed is used here?
         randn = numpy.random.rand(self.n_words, self.embedding_size)
         Wemb = (0.01 * randn).astype(theano.config.floatX)
-        self.Wemb = init_tparams(OrderedDict([('Wemb', Wemb)]))['Wemb']
+        return Wemb
 
     def read_sentence(self, line):
+        """
+        Reads a sentence (text) and converts in into a list of int tokens
+
+        :type line: string
+        :param line: The string to be read
+        """
         line = line.strip().split()
         return [self.worddict[w] if w in self.worddict else 1 for w in line]
 
     def num_words(self):
-        """ + 2 for the UNK symbols """
+        """
+        Returns the number of words in the vocabulary
+        """
         return self.n_words
-
-    def get_embedding(self, word):
-        if word not in self.words:
-            word = "UNK"
-        return self.embeddings[self.words[word]]
