@@ -11,7 +11,7 @@ import scipy.optimize
 from cutils.numeric import numpy_floatX
 
 
-def sgd(cost, params, learning_rate):
+def simple_sgd(cost, params, learning_rate):
     """
     Implements stochastic gradient descent
 
@@ -34,7 +34,7 @@ def sgd(cost, params, learning_rate):
     return updates
 
 
-def new_sgd(lr, tparams, grads, cost, *args):
+def sgd(lr, tparams, grads, cost, *args):
     """
     Implements stochastic gradient descent
     """
@@ -52,7 +52,7 @@ def new_sgd(lr, tparams, grads, cost, *args):
     grad_input = list(args)
     f_grad_shared = theano.function(grad_input, cost, updates=gsup,
                                     name='sgd_f_grad_shared',
-                                    profile=True,
+                                    #profile=True,
                                     #mode=NanGuardMode(nan_is_error=True,
                                                       #inf_is_error=True,
                                                       #big_is_error=True),

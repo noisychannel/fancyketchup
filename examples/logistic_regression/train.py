@@ -7,9 +7,9 @@ import gzip
 import numpy
 import timeit
 
-from cutils.trainer import sgd
+from cutils.training.trainer import simple_sgd
 from cutils.numeric import numpy_floatX
-from cutils.logistic_regression import LogisticRegression
+from cutils.layers.logistic_regression import LogisticRegression
 
 # Include current path in the pythonpath
 script_path = os.path.dirname(os.path.realpath(__file__))
@@ -93,7 +93,7 @@ def sgd_optimization_mnist(learning_rate=0.13, n_epochs=1000,
     )
 
     # Stochastic Gradient descent
-    updates = sgd(cost, classifier.params, learning_rate)
+    updates = simple_sgd(cost, classifier.params, learning_rate)
 
     train_model = theano.function(
         inputs=[index],
