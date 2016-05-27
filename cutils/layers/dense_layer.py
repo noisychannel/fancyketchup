@@ -53,10 +53,30 @@ class DenseLayer(object):
 
         self.W = W
         self.b = b
-        self.params = [self.W, self.b]
+        # Parameters for batch normalization follow
+        self.gamma = theano.shared(
+            value=numpy.ones(
+                (n_out,),
+                dtype=theano.config.floatX), name='gamma')
+        self.beta = theano.shared(
+            value=numpy.zeros(
+                (n_out,),
+                dtype=theano.config.floatX), name='beta')
+
+        self.params = [self.W, self.b, self.gamma, self.beta]
 
         lin_output = T.dot(input, self.W) + self.b
+        # Apply batch normalization to the linear output
+        bn_output = T.nnet.batch_normalization(
+            inputs=lin_output,
+            gamma=self.gamma,
+            beta=self.beta,
+            mean=lin_output.mean((0,), keepdims=True),
+            std=lin_output.std((0,), keepdims=True),
+            mode='low_mem'
+        )
+
         self.output = (
-            lin_output if activation is None
-            else activation(lin_output)
+            bn_output if activation is None
+            else activation(bn_output)
         )

@@ -6,6 +6,8 @@ from cutils.loss_functions import negative_log_likelihood, zero_one_loss, \
     nce_binary_conditional_likelihood
 
 
+from cutils.regularization import L1, L2
+
 class LogisticRegression(object):
     """
     Multi-class logistic regression
@@ -44,14 +46,37 @@ class LogisticRegression(object):
         )
 
         # Compute (symbolic) : softmax(x.W + b)
-        self.lin_output = T.dot(input, self.W) + self.b
+        lin_output = T.dot(input, self.W) + self.b
+        # Parameters for batch normalization follow
+        self.gamma = theano.shared(
+            value=numpy.ones(
+                (n_out,),
+                dtype=theano.config.floatX), name='gamma')
+        self.beta = theano.shared(
+            value=numpy.zeros(
+                (n_out,),
+                dtype=theano.config.floatX), name='beta')
+
+        # Apply batch normalization to the linear output
+        bn_output = T.nnet.batch_normalization(
+            inputs=lin_output,
+            gamma=self.gamma,
+            beta=self.beta,
+            mean=lin_output.mean((0,), keepdims=True),
+            std=T.ones_like(lin_output.var((0,), keepdims=True)),
+            mode='high_mem'
+        )
+
+        lin_output.std((0,))
+
+        self.lin_output = bn_output
 
         # Softmax components computed on demand
         self.p_y_given_x = None
         self.y_pred = None
 
         # Params of the model
-        self.params = [self.W, self.b]
+        self.params = [self.W, self.b, self.gamma, self.beta]
 
         self.input = input
 
@@ -68,7 +93,7 @@ class LogisticRegression(object):
             self.p_y_given_x = T.nnet.softmax(self.lin_output)
         return negative_log_likelihood(self.p_y_given_x, y)
 
-    def nce_loss(self, y, noise_samples, noise_dist):
+    def nce_loss(self, y, y_flat, noise_samples, noise_dist, k):
         """
         Returns the binary NCE loss for examples
 
@@ -83,7 +108,7 @@ class LogisticRegression(object):
         :param noise_dist: The noise distribution for NCE
         """
         return nce_binary_conditional_likelihood(
-            self.lin_output, y, noise_samples, noise_dist)
+            self.lin_output, y, y_flat, noise_samples, noise_dist, k)
 
     def errors(self, y):
         """
