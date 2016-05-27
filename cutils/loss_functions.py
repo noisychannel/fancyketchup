@@ -72,6 +72,10 @@ def nce_binary_conditional_likelihood(p_unnormalized, y, y_flat,
     u() is the unnormalized probability
     \hat{w} ~ q()
     k is the number of noise samples
+
+    https://www3.nd.edu/~dchiang/papers/vaswani-emnlp13.pdf
+    http://www.isi.edu/natural-language/mt/simple-fast-noise.pdf
+    (for one set of noise samples per batch)
     """
     p_unnormalized_exp = T.exp(p_unnormalized)
     p_unnormalized_flat = p_unnormalized_exp.flatten()

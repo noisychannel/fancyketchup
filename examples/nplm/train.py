@@ -7,7 +7,7 @@ from collections import OrderedDict
 import time
 from theano.sandbox.rng_mrg import MRG_RandomStreams as RandomStreams
 
-from cutils.training.trainer import new_sgd
+from cutils.training.trainer import sgd
 from cutils.training.utils import get_minibatches_idx
 from cutils.numeric import numpy_floatX
 
@@ -79,12 +79,12 @@ def sgd_optimization_nplm_mlp(learning_rate=1., L1_reg=0.0, L2_reg=0.0001,
     if use_nce:
         f_cost = theano.function([x, y, y_flat, nce_samples, k],
                                  cost, name='f_cost')
-        f_grad_shared, f_update = new_sgd(lr, tparams, grads,
-                                          cost, x, y, y_flat, nce_samples, k)
+        f_grad_shared, f_update = sgd(lr, tparams, grads,
+                                      cost, x, y, y_flat, nce_samples, k)
     else:
         f_cost = theano.function([x, y], cost, name='f_cost')
-        f_grad_shared, f_update = new_sgd(lr, tparams, grads,
-                                          cost, x, y)
+        f_grad_shared, f_update = gd(lr, tparams, grads,
+                                     cost, x, y)
 
     print("... Optimization")
     kf_valid = get_minibatches_idx(len(valid[0]), batch_size)
