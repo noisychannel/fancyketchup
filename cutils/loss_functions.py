@@ -5,6 +5,9 @@ A collection of loss functions for use with Theano
 import theano
 import theano.tensor as T
 
+from cutils.regularization import L1, L2
+from cutils.numeric import safe_log
+
 
 def zero_one_loss(y_pred, y):
     """
@@ -56,8 +59,8 @@ def binary_cross_entropy_loss(true_value, p_true_value):
                   + (1 - true_value) * T.log(1 - p_true_value), axis=1)
 
 
-def nce_binary_conditional_likelihood(p_unnormalized, y,
-                                      noise_samples, noise_dist):
+def nce_binary_conditional_likelihood(p_unnormalized, y, y_flat,
+                                      noise_samples, noise_dist, k):
     """
     \sum_{w \in batch} [
         \frac{u(w)}{u(w) + k * q(w)}
@@ -70,15 +73,14 @@ def nce_binary_conditional_likelihood(p_unnormalized, y,
     \hat{w} ~ q()
     k is the number of noise samples
     """
-    k = noise_samples.shape[1]
-    unnorm_y = p_unnormalized[T.arange(y.shape[0]), y]
+    p_unnormalized_exp = T.exp(p_unnormalized)
+    p_unnormalized_flat = p_unnormalized_exp.flatten()
+    unnorm_y = p_unnormalized_flat[y_flat]
     noise_y = noise_dist[y]
-    p_class1 = T.log(unnorm_y / (unnorm_y + k * noise_y))
-    noise_other_samples = noise_dist[noise_samples]
-    unnorm_noise_samples = p_unnormalized[T.arange(noise_samples.shape[0])
-                                          .dimshuffle(0, 'x'),
-                                          noise_samples]
-    p_class_0 = T.sum(T.log((k * noise_other_samples) /
-                            (unnorm_noise_samples + k * noise_other_samples)),
-                      axis=1)
-    return -T.mean(p_class1 + p_class_0, dtype=theano.config.floatX)
+    p_class1 = safe_log(unnorm_y / (unnorm_y + k * noise_y))
+
+    # Shape is bs x V
+    E_p_class_0 = safe_log((k * noise_dist)
+                           / (p_unnormalized_exp + k * noise_dist))
+    E_p_class_0 = T.sum(E_p_class_0 * noise_samples, axis=1)
+    return -T.mean(p_class1 + E_p_class_0, dtype=theano.config.floatX)
