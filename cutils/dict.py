@@ -1,3 +1,7 @@
+"""
+Contains the dictionary class which is responible for maintaining the
+vocabulary and word embeddings
+"""
 from __future__ import print_function
 from collections import OrderedDict
 
@@ -35,12 +39,12 @@ class Dict(object):
         """
         self.locked = False
         wordcount = dict()
-        for ss in sentences:
-            words = ss.strip().split()
-            for w in words:
-                if w not in wordcount:
-                    wordcount[w] = 0
-                wordcount[w] += 1
+        for ss_ in sentences:
+            words = ss_.strip().split()
+            for word in words:
+                if word not in wordcount:
+                    wordcount[word] = 0
+                wordcount[word] += 1
         counts = wordcount.values()
         keys = wordcount.keys()
         self.worddict = dict()
@@ -48,8 +52,8 @@ class Dict(object):
         self.worddict['<PAD>'] = 0
         # Reverse and truncate at max_words
         sorted_idx = numpy.argsort(counts)[::-1][:n_words]
-        for idx, ss in enumerate(sorted_idx):
-            self.worddict[keys[ss]] = idx + 2
+        for idx_, ss_ in enumerate(sorted_idx):
+            self.worddict[keys[ss_]] = idx_ + 2
 
         self.n_words = len(self.worddict)
 
@@ -64,9 +68,9 @@ class Dict(object):
 
         self.embedding_size = emb_dim
         # TODO: Remove self.Wemb at some point, it should be part of params
-        Wemb = self.initialize_embedding()
+        w_emb = self.initialize_embedding()
         params = OrderedDict()
-        params['Wemb'] = Wemb
+        params['Wemb'] = w_emb
         self.params = params
         self.tparams = init_tparams(params)
 
@@ -95,8 +99,8 @@ class Dict(object):
         """
         # TODO: Which random seed is used here?
         randn = numpy.random.rand(self.n_words, self.embedding_size)
-        Wemb = (0.01 * randn).astype(theano.config.floatX)
-        return Wemb
+        w_emb = (0.01 * randn).astype(theano.config.floatX)
+        return w_emb
 
     def read_sentence(self, line):
         """
