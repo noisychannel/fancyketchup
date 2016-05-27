@@ -1,9 +1,11 @@
 """
 Various training algorithms
 """
+from __future__ import print_function
 
 import theano
 import theano.tensor as T
+from theano.compile.nanguardmode import NanGuardMode
 import scipy.optimize
 
 from cutils.numeric import numpy_floatX
@@ -38,11 +40,26 @@ def new_sgd(lr, tparams, grads, cost, *args):
     """
     gshared = [theano.shared(p.get_value() * 0., name='%s_grad' % k)
                for k, p in tparams.items()]
-    gsup = [(gs, g) for gs, g in zip(gshared, grads)]
+    # Gradient clipping
+    # Move the rescale parameter to an argument or config
+    grad_norm = T.sqrt(sum(map(lambda x: T.sqr(x).sum(), grads)))
+    rescale = 5.
+    scaling_num = rescale
+    scaling_den = T.maximum(rescale, grad_norm)
+    gsup = [(gs, g * (scaling_num / scaling_den))
+            for gs, g in zip(gshared, grads)]
     # Compute gradients but do not update them
     grad_input = list(args)
     f_grad_shared = theano.function(grad_input, cost, updates=gsup,
-                                    name='sgd_f_grad_shared')
+                                    name='sgd_f_grad_shared',
+                                    profile=True,
+                                    #mode=NanGuardMode(nan_is_error=True,
+                                                      #inf_is_error=True,
+                                                      #big_is_error=True),
+                                    #mode=theano.compile.MonitorMode(
+                                        #pre_func=inspect_inputs,
+                                        #post_func=inspect_outputs),
+                    )
     pup = [(p, p - lr * g) for p, g in zip(tparams.values(), gshared)]
     # Function which updates weights
     f_update = theano.function([lr], [], updates=pup,
@@ -191,3 +208,10 @@ def conjugate_gradient_descent(train_fn, train_fn_grad,
         maxiter=n_epochs
     )
     return best_params
+
+def inspect_inputs(i, node, fn):
+    #print(i, node, "input(s) value(s):", [input[0] for input in fn.inputs], end='')
+    print(i, node, "input(s) value(s):",end='')
+
+def inspect_outputs(i, node, fn):
+    print(" output(s) value(s):", [output[0] for output in fn.outputs])
