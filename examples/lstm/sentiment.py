@@ -16,6 +16,7 @@ from cutils.layers.utils import dropout_layer
 from cutils.layers.lstm import LSTM
 from cutils.params.utils import zipp, unzip, load_params, init_tparams
 from cutils.data_interface.utils import pad_and_mask
+from cutils.training.trainer import sgd
 
 import imdb
 
@@ -60,7 +61,7 @@ def init_params(dim_proj, ydim, word_dict):
 
 
 def build_model(tparams, options):
-    use_noise = T.matrix('x', dtype='int64')
+    use_noise = theano.shared(numpy_floatX(0.))
     x = T.matrix('x', dtype='int64')
     mask = T.matrix('mask', dtype=theano.config.floatX)
     y = T.vector('y', dtype='int64')
@@ -142,7 +143,7 @@ def train_lstm(
     decay_c=0.,
     lrate=0.0001,
     n_words=10000,
-    optimizer='sgd',
+    optimizer=sgd,
     encoder='lstm',
     save_to='lstm_model.npz',
     valid_freq=370,
@@ -168,7 +169,7 @@ def train_lstm(
         idx = numpy.arange(len(test[0]))
         numpy.random.shuffle(idx)
         idx = idx[:test_size]
-        test = (test[0][n] for n in idx), (test[1][n] for n in idx)
+        test = ([test[0][n] for n in idx], [test[1][n] for n in idx])
 
     ydim = numpy.max(train[1]) + 1
     model_options['ydim'] = ydim
@@ -194,8 +195,8 @@ def train_lstm(
     grads = theano.grad(cost, wrt=list(tparams.values()))
     f_grad = theano.function([x, mask, y], grads, name='f_grad')
 
-    lr = theano.scalar('lr')
-    f_grad_shared, f_update = optimizer([lr, tparams, grads, x, mask, y, cost])
+    lr = T.scalar('lr')
+    f_grad_shared, f_update = optimizer(lr, tparams, grads, cost, x, mask, y)
 
     print('Optimization')
 

@@ -38,7 +38,7 @@ def pad_and_mask(seqs, labels, maxlen=None):
     maxlen = numpy.max(lengths)
 
     x = numpy.zeros((maxlen, n_samples)).astype('int64')
-    x_mask = numpy.zeros((maxlen, n_samples)).astype(theano.config.floatx)
+    x_mask = numpy.zeros((maxlen, n_samples)).astype(theano.config.floatX)
     for idx, s in enumerate(seqs):
         x[:lengths[idx], idx] = s
         x_mask[:lengths[idx], idx] = 1.
