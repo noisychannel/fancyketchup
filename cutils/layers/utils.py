@@ -1,18 +1,24 @@
 import theano.tensor as T
 
 
-def dropout_layer(state_before, use_noise, trng, p=0.5):
-    """ Drop p entries, in expectation"""
+def dropout_layer(state_before, use_noise, trng, p_dropped=0.5):
+    """
+    Drop p entries, in expectation
+
+    state_before : The layer to which dropout will be applied
+    use_noise: Use stochastic noise to dropout individual units
+    trng : A Theano rng stream
+    p_dropped : The probability of not being dropped
+    """
     proj = T.switch(use_noise,
-                    (state_before *
-                     mask_input(trng, state_before, p)),
-                    state_before * 0.5)
+                    random_mask_input(trng, state_before, p_dropped),
+                    state_before * (1 - p_dropped))
     return proj
 
 
-def mask_input(theano_rng, input, p):
+def random_mask_input(theano_rng, input, p_dropped):
     """This function keeps ``1-p`` entries of the inputs the
-    same and zero-out randomly selected subset of size ``p``
+    same and zeroes-out randomly selected subset of size ``p``
     For use with dropout and denoising autoencoders
     Note : first argument of theano.rng.binomial is the shape(size) of
            random numbers that it should produce
@@ -34,5 +40,5 @@ def mask_input(theano_rng, input, p):
 
     """
     return theano_rng.binomial(size=input.shape, n=1,
-                               p=1 - p,
+                               p=1 - p_dropped,
                                dtype=input.dtype) * input
