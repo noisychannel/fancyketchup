@@ -4,7 +4,7 @@ import theano.tensor as T
 from theano.tensor.shared_randomstreams import RandomStreams
 
 from cutils.params.init import xavier_init
-from cutils.layers.utils import mask_input
+from cutils.layers.utils import random_mask_input
 from cutils.loss_functions import binary_cross_entropy_loss as xent
 
 
@@ -142,7 +142,7 @@ class AutoEncoder(object):
                 correctly as it only support float32 for now.
 
         """
-        return mask_input(self.theano_rng, input, corruption_level)
+        return random_mask_input(self.theano_rng, input, corruption_level)
 
     def loss(self, corruption_level):
         """

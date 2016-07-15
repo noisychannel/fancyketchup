@@ -4,3 +4,6 @@ data
 scripts/*
 share/*
 tmp
+examples/test
+*.npz
+*.log

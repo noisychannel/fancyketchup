@@ -14,9 +14,9 @@ class IMDB(DataInterface):
         # Download the dataset if it does not exist
         if os.path.isdir(os.getcwd() + "/" + dataset_path):
             self.dataset_path = os.getcwd() + "/" + dataset_path
-        if not os.path.isdir(dataset_path):
+        if not os.path.isdir(self.dataset_path):
             if origin is not None:
-                du.download_dataset(dataset_path, origin)
+                du.download_dataset(self.dataset_path, origin)
             else:
                 raise Exception('Dataset not found and the origin \
                     was not specified')

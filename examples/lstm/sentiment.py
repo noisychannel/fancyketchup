@@ -2,6 +2,8 @@
 Build a tweet sentiment analyzer
 """
 
+from __future__ import print_function
+
 import time
 import pickle
 import numpy
@@ -16,7 +18,7 @@ from cutils.layers.utils import dropout_layer
 from cutils.layers.lstm import LSTM
 from cutils.params.utils import zipp, unzip, load_params, init_tparams
 from cutils.data_interface.utils import pad_and_mask
-from cutils.training.trainer import sgd
+from cutils.training.trainer import adadelta
 
 import imdb
 
@@ -143,7 +145,7 @@ def train_lstm(
     decay_c=0.,
     lrate=0.0001,
     n_words=10000,
-    optimizer=sgd,
+    optimizer=adadelta,
     encoder='lstm',
     save_to='lstm_model.npz',
     valid_freq=370,
@@ -162,7 +164,7 @@ def train_lstm(
 
     imdb_data = imdb.IMDB(dataset, n_words=n_words,
                           emb_dim=model_options['dim_proj'])
-    train, valid, test = imdb_data.load_data(valid_portion=0.5, maxlen=maxlen)
+    train, valid, test = imdb_data.load_data(valid_portion=0.05, maxlen=maxlen)
 
     if test_size > 0:
         # Random shuffle of the test set
@@ -253,7 +255,8 @@ def train_lstm(
                     else:
                         params = unzip(tparams)
                     numpy.savez(save_to, history_errs=history_errs, **params)
-                    pickle.dump(model_options, open('%s.pkl' % save_to, 'wb'), -1)
+                    pickle.dump(model_options, open('%s.pkl' % save_to, 'wb'),
+                                -1)
                     print('Done')
 
                 if numpy.mod(uidx, valid_freq) == 0:
@@ -263,11 +266,16 @@ def train_lstm(
                     test_err = pred_error(f_pred, test, kf_test)
                     history_errs.append([valid_err, test_err])
 
-                    if (best_p is None or valid_err <= numpy.array([history_errs])[:0].min()):
+                    if (best_p is None or valid_err <=
+                            numpy.array(history_errs)[:, 0].min()):
                         best_p = unzip(tparams)
                         bad_counter = 0
 
-                    if (len(history_errs) > patience and valid_err >= numpy.array(history_errs)[:-patience,0].min()):
+                    print(('Train ', train_err, 'Valid ', valid_err,
+                           'Test ', test_err))
+
+                    if (len(history_errs) > patience and valid_err
+                            >= numpy.array(history_errs)[:-patience, 0].min()):
                         bad_counter += 1
                         if bad_counter > patience:
                             print('Early Stop')
@@ -284,7 +292,7 @@ def train_lstm(
 
     end_time = time.time()
     if best_p is not None:
-        zipp(best_p, params)
+        zipp(best_p, tparams)
     else:
         best_p = unzip(tparams)
 
@@ -300,7 +308,8 @@ def train_lstm(
         numpy.savez(save_to, train_err=train_err,
                     valid_err=valid_err, test_err=test_err,
                     history_errs=history_errs, **best_p)
-    print('The code run for %d epochs, with %f epochs/sec' % ((eidx + 1), ((end_time - start_time) / (1. * (eidx + 1)))))
+    print('The code run for %d epochs, with %f epochs/sec' %
+          ((eidx + 1), ((end_time - start_time) / (1. * (eidx + 1)))))
     print('Training took %.1fs' % (end_time - start_time))
     return train_err, valid_err, test_err
 
