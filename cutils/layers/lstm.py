@@ -1,3 +1,5 @@
+import warnings
+
 import numpy
 import theano
 import theano.tensor as T
@@ -43,17 +45,29 @@ class LSTM(object):
             self.tparams[p] = tparams[p]
 
     def lstm_layer(self, state_below, dim_proj, mask=None):
+        """
+        Recurrence with an LSTM hidden unit
+
+        state_below : Is the input. This may be a single sample with
+                      multiple timesteps, or a batch
+        dim_proj : The dimensionality of the hidden units (projection)
+        mask : The mask applied to the input for batching
+        """
         # Make sure that we've initialized the tparams
         assert len(self.tparams) > 0
         # State below : steps x samples
         # Recurrence over dim 0
         nsteps = state_below.shape[0]
+        # Check if the input is a batch or a single sample
         if state_below.ndim == 3:
             n_samples = state_below.shape[1]
         else:
             n_samples = 1
 
-        assert mask is not None
+        if mask is None:
+            warnings.warn("You seem to be supplying single samples for \
+                           recurrence. You may see speedup gains with using \
+                           batches instead.")
 
         def _slice(_x, n, dim):
             if _x.ndim == 3:
