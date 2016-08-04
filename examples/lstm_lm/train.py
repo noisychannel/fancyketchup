@@ -21,7 +21,7 @@ from cutils.training.trainer import adadelta
 script_path = os.path.dirname(os.path.realpath(__file__))
 sys.path.append(script_path)
 
-import imdb
+import ptb
 from lm import LSTM_LM
 
 SEED = 123
@@ -44,69 +44,65 @@ def train_lstm(
     maxlen=100,
     batch_size=16,
     valid_batch_size=64,
-    dataset='../../data/aclImdb',
+    dataset='../../data/simple-examples/data',
     noise_std=0.,
     use_dropout=True,
     reload_model=None,
-    test_size=-1
 ):
     model_options = locals().copy()
     print("model options", model_options)
 
-    imdb_data = imdb.IMDB(dataset, n_words=n_words,
-                          emb_dim=model_options['dim_proj'])
-    train, valid, test = imdb_data.load_data(valid_portion=0.05, maxlen=maxlen)
+    print("... Loading data")
+    ptb_data = ptb.PTB(dataset, n_words=n_words,
+                       emb_dim=model_options['dim_proj'])
+    train, valid, test = ptb_data.load_data(maxlen=maxlen)
+    print("... Done loading data")
 
-    if test_size > 0:
-        # Random shuffle of the test set
-        idx = numpy.arange(len(test[0]))
-        numpy.random.shuffle(idx)
-        idx = idx[:test_size]
-        test = ([test[0][n] for n in idx], [test[1][n] for n in idx])
+    # Random shuffle of the test set. Why? TODO
 
-    ydim = numpy.max(train[1]) + 1
+    ydim = ptb_data.dictionary.n_words
     model_options['ydim'] = ydim
 
     print('Building model')
     # Create the initial parameters for the model
     lstm_lm = LSTM_LM(model_options['dim_proj'], ydim,
-                      imdb_data.dictionary, SEED)
+                      ptb_data.dictionary, SEED)
 
     if reload_model:
-        load_params('lstm_model.npz', lstm_lm.params)
+        load_params(save_to, lstm_lm.params)
         # Update the tparams with the new values
         zipp(lstm_lm.params, lstm_lm.tparams)
 
     # Create the shared variables for the model
-    (use_noise, x, mask, y, cost) = lstm_lm.build_model()
+    (use_noise, x, mask, cost) = lstm_lm.build_model()
 
     if decay_c > 0.:
         cost += weight_decay(cost, lstm_lm.tparams['U'], decay_c)
 
-    f_cost = theano.function([x, mask, y], cost, name='f_cost')
+    f_cost = theano.function([x, mask], cost, name='f_cost')
     grads = theano.grad(cost, wrt=list(lstm_lm.tparams.values()))
-    f_grad = theano.function([x, mask, y], grads, name='f_grad')
+    f_grad = theano.function([x, mask], grads, name='f_grad')
 
     lr = T.scalar('lr')
-    f_grad_shared, f_update = optimizer(lr, lstm_lm.tparams, grads, cost, x, mask, y)
+    f_grad_shared, f_update = optimizer(lr, lstm_lm.tparams, grads, cost, x, mask)
 
     print('Optimization')
 
-    kf_valid = get_minibatches_idx(len(valid[0]), valid_batch_size)
-    kf_test = get_minibatches_idx(len(test[0]), valid_batch_size)
+    kf_valid = get_minibatches_idx(len(valid), valid_batch_size)
+    kf_test = get_minibatches_idx(len(test), valid_batch_size)
 
-    print('%d train examples' % len(train[0]))
-    print('%d valid examples' % len(valid[0]))
-    print('%d test examples' % len(test[0]))
+    print('%d train examples' % len(train))
+    print('%d valid examples' % len(valid))
+    print('%d test examples' % len(test))
 
     history_errs = []
     best_p = None
     bad_count = 0
 
     if valid_freq == -1:
-        valid_freq = len(train[0]) // batch_size
+        valid_freq = len(train) // batch_size
     if save_freq == -1:
-        save_freq = len(train[0]) // batch_size
+        save_freq = len(train) // batch_size
 
     uidx = 0  # The number of updates done
     estop = False  # Early stop
@@ -115,20 +111,19 @@ def train_lstm(
         for eidx in range(max_epochs):
             n_samples = 0
             # Get shuffled index for the training set
-            kf = get_minibatches_idx(len(train[0]), batch_size, shuffle=True)
+            kf = get_minibatches_idx(len(train), batch_size, shuffle=True)
             for _, train_index in kf:
                 uidx += 1
                 use_noise.set_value(1.)
 
                 # Select the random examples in this minibatch
-                y = [train[1][t] for t in train_index]
-                x = [train[0][t] for t in train_index]
+                x = [train[t] for t in train_index]
 
                 # Convert to shape (minibatch maxlen, n samples)
-                x, mask, y = pad_and_mask(x, y)
+                x, mask, _ = pad_and_mask(x)
                 n_samples += x.shape[1]
 
-                cost = f_grad_shared(x, mask, y)
+                cost = f_grad_shared(x, mask)
                 f_update(lrate)
 
                 if numpy.isnan(cost) or numpy.isinf(cost):
@@ -206,5 +201,4 @@ def train_lstm(
 if __name__ == '__main__':
     train_lstm(
         max_epochs=100,
-        test_size=500
     )

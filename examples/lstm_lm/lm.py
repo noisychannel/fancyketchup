@@ -60,8 +60,11 @@ class LSTM_LM(object):
     def build_model(self, encoder='lstm', use_dropout=True):
         use_noise = theano.shared(numpy_floatX(0.))
         x = T.matrix('x', dtype='int64')
+        # Since we are simply predicting the next word, the
+        # following statement shifts the content of the x by 1
+        # in the time dimension for prediction (axis 0, assuming TxNxV)
+        y = T.roll(x, -1, 0)
         mask = T.matrix('mask', dtype=theano.config.floatX)
-        y = T.vector('y', dtype='int64')
 
         n_timesteps = x.shape[0]
         n_samples = x.shape[1]
@@ -70,29 +73,34 @@ class LSTM_LM(object):
                                                          n_samples,
                                                          self.dim_proj])
         proj = self.layers['lstm'].lstm_layer(emb, self.dim_proj, mask=mask)
-        # TODO: What happens when the encoder is not an LSTM
-        # This should cleanly fall back to a normal hidden unit
-        if encoder == 'lstm':
-            #TODO: What the shit is happening here?
-            proj = (proj * mask[:, :, None]).sum(axis=0)
-            proj = proj / mask.sum(axis=0)[:, None]
+        # Apply the mask to the final output to 0 out the time steps that are invalid
+        proj = proj * mask[:, :, None]
         if use_dropout:
             trng = RandomStreams(self.random_seed)
             proj = dropout_layer(proj, use_noise, trng)
 
-        pred = T.nnet.softmax(T.dot(proj, self.tparams['U'])
-                              + self.tparams['b'])
+        pre_s = T.dot(proj, self.tparams['U']) + self.tparams['b']
+        # Softmax works for 2-tensors (matrices) only. We have a 3-tensor
+        # TxNxV. So we reshape it to (T*N)xV, apply softmax and reshape again
+        # -1 is a proxy for infer dim based on input (numpy style)
+        pre_s_r = T.reshape(pre_s, (pre_s.shape[0] * pre_s.shape[1], -1))
+        # Softmax will receive all-0s for previously padded entries
+        pred_r = T.nnet.softmax(pre_s_r)
+        pred = T.reshape(pred_r, pre_s.shape)
 
         self.f_pred_prob = theano.function([x, mask], pred, name='f_pred_prob')
-        self.f_pred = theano.function([x, mask], pred.argmax(axis=1), name='f_pred')
+        self.f_pred = theano.function([x, mask], pred.argmax(axis=2), name='f_pred')
 
         off = 1e-8
         if pred.dtype == 'float16':
             off = 1e-6
 
-        cost = -T.log(pred[T.arange(n_samples), y] + off).mean()
+        # Note the use of flatten here. We can't directly index a 3-tensor
+        # and hence we use the (T*N)xV view which is indexed by the flattened
+        # label matrix, dim = (T*N)x1
+        cost = -T.log(pred[T.arange(pred_r.shape[0]), y.flatten()] + off).mean()
 
-        return use_noise, x, mask, y, cost
+        return use_noise, x, mask, cost
 
 
     def pred_probs(self, data, iterator, verbose=False):
