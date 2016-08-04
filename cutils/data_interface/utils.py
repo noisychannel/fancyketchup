@@ -5,7 +5,7 @@ from subprocess import Popen, PIPE
 from six.moves import urllib
 
 
-def pad_and_mask(seqs, labels, maxlen=None):
+def pad_and_mask(seqs, labels=None, maxlen=None):
     """create the matrices from the datasets.
 
     this pad each sequence to the same lenght: the lenght of the
@@ -20,18 +20,12 @@ def pad_and_mask(seqs, labels, maxlen=None):
     lengths = [len(s) for s in seqs]
 
     if maxlen is not None:
-        new_seqs = []
-        new_labels = []
-        new_lengths = []
-        for l, s, y in zip(lengths, seqs, labels):
-            if l < maxlen:
-                new_seqs.append(s)
-                new_labels.append(y)
-                new_lengths.append(l)
-        lengths = new_lengths
-        labels = new_labels
-        seqs = new_seqs
-
+        accepted_idx = [i_ for i_, l in enumerate(lengths) if l < maxlen]
+        seqs = [seqs[i_] for i_ in accepted_idx]
+        lengths = [lengths[i_] for i_ in accepted_idx]
+        if labels is not None:
+            labels = [labels[i_] for i_ in accepted_idx]
+        # Make sure we have some samples left
         assert len(lengths) > 0
 
     n_samples = len(seqs)
@@ -39,11 +33,18 @@ def pad_and_mask(seqs, labels, maxlen=None):
 
     x = numpy.zeros((maxlen, n_samples)).astype('int64')
     x_mask = numpy.zeros((maxlen, n_samples)).astype(theano.config.floatX)
+    y = labels
+    #TODO : Handle the case where labels are a matrix (many to many)
+    #if labels is not None:
+        #if type(labels[0]) is list:
+            #y = numpy.zeros((maxlen, n_samples)).astype(theano.config.floatX)
+            #for idx, y_ in enumerate(labels):
+                #y[:lengths[idx], idx] = y_
     for idx, s in enumerate(seqs):
         x[:lengths[idx], idx] = s
         x_mask[:lengths[idx], idx] = 1.
 
-    return x, x_mask, labels
+    return x, x_mask, y
 
 
 def scale_to_unit_interval(ndar, eps=1e-8):
