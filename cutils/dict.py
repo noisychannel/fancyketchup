@@ -53,6 +53,8 @@ class Dict(object):
         # Reverse and truncate at max_words
         sorted_idx = numpy.argsort(counts)[::-1][:n_words]
         for idx_, ss_ in enumerate(sorted_idx):
+            if keys[ss_] == '<UNK>':
+                continue
             self.worddict[keys[ss_]] = idx_ + 2
 
         self.n_words = len(self.worddict)
