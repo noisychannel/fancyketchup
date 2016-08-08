@@ -98,7 +98,7 @@ class LSTM_LM(object):
         # Note the use of flatten here. We can't directly index a 3-tensor
         # and hence we use the (T*N)xV view which is indexed by the flattened
         # label matrix, dim = (T*N)x1
-        cost = -T.log(pred[T.arange(pred_r.shape[0]), y.flatten()] + off).mean()
+        cost = -T.log(pred_r[T.arange(pred_r.shape[0]), y.flatten()] + off).mean()
 
         return use_noise, x, mask, cost
 
@@ -107,15 +107,14 @@ class LSTM_LM(object):
         """
         Probabilities for new examples from a trained model
         """
-        n_samples = len(data[0])
-        probs = numpy.zeros((n_samples, 2)).astype(theano.config.floatX)
+        n_steps = len(data[0])
+        n_samples = len(data[1])
+        probs = numpy.zeros((n_steps, n_samples, self.ydim)).astype(theano.config.floatX)
 
         n_done = 0
 
         for _, valid_index in iterator:
-            x, mask, y = pad_and_mask([data[0][t] for t in valid_index],
-                                      numpy.array(data[1])[valid_index],
-                                      maxlen=None)
+            x, mask, _ = pad_and_mask([data[t] for t in valid_index])
             pred_probs = self.f_pred_prob(x, mask)
             probs[valid_index, :] = pred_probs
 
@@ -132,11 +131,11 @@ class LSTM_LM(object):
         """
         valid_err = 0
         for _, valid_index in iterator:
-            x, mask, y = pad_and_mask([data[0][t] for t in valid_index],
-                                      numpy.array(data[1])[valid_index],
-                                      maxlen=None)
+            x, mask, _ = pad_and_mask([data[t] for t in valid_index])
+            # Preds is TxN
             preds = self.f_pred(x, mask)
-            targets = numpy.array(data[1])[valid_index]
+            # Targets is TxN
+            targets = np.roll(x, -1, 0)
             valid_err += (preds == targets).sum()
         valid_err = 1. - numpy_floatX(valid_err) / len(data[0])
 
