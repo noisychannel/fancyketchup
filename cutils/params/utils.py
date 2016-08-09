@@ -32,7 +32,7 @@ def load_params(path, params):
     for kk, vv in params.items():
         if kk not in pp:
             raise Warning('%s is not in the archive' % kk)
-        params[kk] = pp
+        params[kk] = pp[kk]
 
     return params
 
