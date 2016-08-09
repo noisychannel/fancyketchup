@@ -1,3 +1,3 @@
 #!/usr/bin/env bash
 
-PYTHONPATH=/export/a16/gkumar/code/custom/theano_scratch:$PYTHONPATH
+export PYTHONPATH=/export/b09/ws15gkumar/fancyketchup:$PYTHONPATH
