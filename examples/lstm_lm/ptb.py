@@ -21,9 +21,6 @@ class PTB(DataInterface):
         print("... Building dictionary")
         self.build_dict(n_words)
         print("... Done building dictionary")
-        self.train = None
-        self.valid = None
-        self.test = None
 
     def load_data(self, maxlen=None, sort_by_len=True):
         train = self.grab_data(('%s/ptb.train.txt' % self.dataset_path))
@@ -44,10 +41,6 @@ class PTB(DataInterface):
             test = [valid[i] for i in sorted_index]
             sorted_index = du.len_argsort(test)
             test = [test[i] for i in sorted_index]
-
-        self.train = train
-        self.valid = valid
-        self.test = test
 
         return train, valid, test
 

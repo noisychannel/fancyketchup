@@ -33,8 +33,8 @@ class LSTM_LM(object):
         self.rng = numpy.random.RandomState(self.random_seed)
         self.params = OrderedDict()
         self.tparams = OrderedDict()
-        self.f_pred_prob = None
-        self.f_pred = None
+        self.f_cost = None
+        self.f_decode = None
 
         def unpack(source, target):
             for kk, vv in source.items():
@@ -57,7 +57,7 @@ class LSTM_LM(object):
         unpack(other_tparams, self.tparams)
 
 
-    def build_model(self, encoder='lstm', use_dropout=True):
+    def build_model(self, use_dropout=True):
         use_noise = theano.shared(numpy_floatX(0.))
         x = T.matrix('x', dtype='int64')
         # Since we are simply predicting the next word, the
@@ -74,6 +74,7 @@ class LSTM_LM(object):
                                                          self.dim_proj])
         proj = self.layers['lstm'].lstm_layer(emb, self.dim_proj, mask=mask)
         # Apply the mask to the final output to 0 out the time steps that are invalid
+        # TODO, this should probably be set to 1? 
         proj = proj * mask[:, :, None]
         if use_dropout:
             trng = RandomStreams(self.random_seed)
@@ -88,9 +89,6 @@ class LSTM_LM(object):
         pred_r = T.nnet.softmax(pre_s_r)
         pred = T.reshape(pred_r, pre_s.shape)
 
-        self.f_pred_prob = theano.function([x, mask], pred, name='f_pred_prob')
-        self.f_pred = theano.function([x, mask], pred.argmax(axis=2), name='f_pred')
-
         off = 1e-8
         if pred.dtype == 'float16':
             off = 1e-6
@@ -100,43 +98,74 @@ class LSTM_LM(object):
         # label matrix, dim = (T*N)x1
         cost = -T.log(pred_r[T.arange(pred_r.shape[0]), y.flatten()] + off).mean()
 
+        self.f_cost = theano.function([x, mask], cost, name='f_cost')
+
         return use_noise, x, mask, cost
 
 
-    def pred_probs(self, data, iterator, verbose=False):
+    def build_decode(self):
+        x = T.matrix('x', dtype='int64')
+        emb = self.tparams['Wemb'][x.flatten()].reshape([x.shape[0],
+                                                         x.shape[1],
+                                                         self.dim_proj])
+        mask = T.matrix('mask', dtype=theano.config.floatX)
+        n_timesteps = T.iscalar('n_time')
+        n_samples = x.shape[1]
+
+        def output_to_input_transform(output):
+            """
+            TODO:t_mask is the mask for the current time step, shape=(Nx1)
+            probably required
+            """
+            ## N x dim
+            #output = output * previous_mask[:, None]
+            # N X y_dim
+            pre_soft = T.dot(output, self.tparams['U']) + self.tparams['b']
+            # Softmax will receive all-0s for previously padded entries
+            pred = T.nnet.softmax(pre_soft)
+            # N x 1
+            pred_argmax = pred.argmax(axis=1)
+            new_input = self.tparams['Wemb'][pred_argmax.flatten()].reshape([n_samples,
+                                                                       self.dim_proj])
+            return new_input
+
+        proj = self.layers['lstm'].lstm_layer(emb, self.dim_proj, mask=mask, n_steps=n_timesteps,
+                                               output_to_input_func=output_to_input_transform)
+        pre_s = T.dot(proj, self.tparams['U']) + self.tparams['b']
+        # Softmax works for 2-tensors (matrices) only. We have a 3-tensor
+        # TxNxV. So we reshape it to (T*N)xV, apply softmax and reshape again
+        # -1 is a proxy for infer dim based on input (numpy style)
+        pre_s_r = T.reshape(pre_s, (pre_s.shape[0] * pre_s.shape[1], -1))
+        # Softmax will receive all-0s for previously padded entries
+        pred_r = T.nnet.softmax(pre_s_r)
+        pred = T.reshape(pred_r, pre_s.shape).argmax(axis=2)
+        self.f_decode = theano.function([x, mask, n_timesteps], pred, name='f_decode')
+
+        return x, mask, n_timesteps
+
+
+    def pred_cost(self, data, iterator, verbose=False):
         """
         Probabilities for new examples from a trained model
+
+        data : The complete dataset. A list of lists. Each nested list is a sample
+        iterator : A list of lists. Each nested list is a batch with idxs to the sample in data
         """
-        n_steps = len(data[0])
-        n_samples = len(data[1])
-        probs = numpy.zeros((n_steps, n_samples, self.ydim)).astype(theano.config.floatX)
+        # Total samples
+        n_samples = len(data)
+        running_cost = []
+        samples_seen = []
 
         n_done = 0
 
+        # valid_index is a list containing the IDXs of samples for a batch
         for _, valid_index in iterator:
             x, mask, _ = pad_and_mask([data[t] for t in valid_index])
-            pred_probs = self.f_pred_prob(x, mask)
-            probs[valid_index, :] = pred_probs
-
+            # Accumulate running cost
+            samples_seen.append(len(valid_index))
+            running_cost.append(self.f_cost(x, mask))
             n_done += len(valid_index)
             if verbose:
                 print("%d/%d samples classified" % (n_done, n_samples))
 
-        return probs
-
-
-    def pred_error(self, data, iterator, verbose=False):
-        """
-        Errors for samples for a trained model
-        """
-        valid_err = 0
-        for _, valid_index in iterator:
-            x, mask, _ = pad_and_mask([data[t] for t in valid_index])
-            # Preds is TxN
-            preds = self.f_pred(x, mask)
-            # Targets is TxN
-            targets = np.roll(x, -1, 0)
-            valid_err += (preds == targets).sum()
-        valid_err = 1. - numpy_floatX(valid_err) / len(data[0])
-
-        return valid_err
+        return sum([samples_seen[i] * running_cost[i] for i in range(len(samples_seen))]) / sum(samples_seen)

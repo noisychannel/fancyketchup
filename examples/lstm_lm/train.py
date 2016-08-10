@@ -1,5 +1,5 @@
 """
-Build a tweet sentiment analyzer
+Training for the LSTM-LM
 """
 
 from __future__ import print_function
@@ -39,6 +39,7 @@ def train_lstm(
     optimizer=adadelta,
     encoder='lstm',
     save_to='lstm_model.npz',
+    load_from='lstm_model.96.npz',
     valid_freq=370,
     save_freq=1110,
     maxlen=100,
@@ -47,7 +48,7 @@ def train_lstm(
     dataset='../../data/simple-examples/data',
     noise_std=0.,
     use_dropout=True,
-    reload_model=None,
+    reload_model=False,
 ):
     model_options = locals().copy()
     print("model options", model_options)
@@ -69,7 +70,8 @@ def train_lstm(
                       ptb_data.dictionary, SEED)
 
     if reload_model:
-        load_params(save_to, lstm_lm.params)
+        print('Reloading params from %s' % save_to)
+        load_params(load_from, lstm_lm.params)
         # Update the tparams with the new values
         zipp(lstm_lm.params, lstm_lm.tparams)
 
@@ -85,6 +87,12 @@ def train_lstm(
 
     lr = T.scalar('lr')
     f_grad_shared, f_update = optimizer(lr, lstm_lm.tparams, grads, cost, x, mask)
+
+    # Keep a few sentences to decode, to see how training is performing
+    lstm_lm.build_decode()
+    decode_sentences = ['with the', 'the cat', 'when the']
+    decode_sentences = [ptb_data.dictionary.read_sentence(s) for s in decode_sentences]
+    decode_sentences, decode_mask, _ = pad_and_mask(decode_sentences)
 
     print('Optimization')
 
@@ -146,20 +154,22 @@ def train_lstm(
 
                 if numpy.mod(uidx, valid_freq) == 0:
                     use_noise.set_value(0.)
-                    train_err = lstm_lm.pred_error(train, kf)
-                    valid_err = lstm_lm.pred_error(valid, kf_valid)
-                    test_err = lstm_lm.pred_error(test, kf_test)
-                    history_errs.append([valid_err, test_err])
+                    train_cost = lstm_lm.pred_cost(train, kf)
+                    valid_cost = lstm_lm.pred_cost(valid, kf_valid)
+                    test_cost = lstm_lm.pred_cost(test, kf_test)
+                    history_errs.append([valid_cost, test_cost])
 
-                    if (best_p is None or valid_err <=
+                    if (best_p is None or valid_cost <=
                             numpy.array(history_errs)[:, 0].min()):
                         best_p = unzip(lstm_lm.tparams)
                         bad_counter = 0
 
-                    print(('Train ', train_err, 'Valid ', valid_err,
-                           'Test ', test_err))
+                    print(('Train ', train_cost, 'Valid ', valid_cost,
+                           'Test ', test_cost))
+                    print("Some sentences.. ")
+                    print(ptb_data.dictionary.idx_to_words(lstm_lm.f_decode(decode_sentences, decode_mask, model_options['maxlen'])))
 
-                    if (len(history_errs) > patience and valid_err
+                    if (len(history_errs) > patience and valid_cost
                             >= numpy.array(history_errs)[:-patience, 0].min()):
                         bad_counter += 1
                         if bad_counter > patience:
@@ -182,23 +192,26 @@ def train_lstm(
         best_p = unzip(lstm_lm.tparams)
 
     use_noise.set_value(0.)
-    kf_train_sorted = get_minibatches_idx(len(train[0]), batch_size)
-    train_err = lstm_lm.pred_error(train, kf_train_sorted)
-    valid_err = lstm_lm.pred_error(valid, kf_valid)
-    test_err = lstm_lm.pred_error(test, kf_test)
+    # Note that the training dataset is sorted by length.
+    # This is for faster decoding, since padding will create smaller batch matrices
+    kf_train_sorted = get_minibatches_idx(len(train), batch_size)
+    train_cost = lstm_lm.pred_cost(train, kf_train_sorted)
+    valid_cost = lstm_lm.pred_cost(valid, kf_valid)
+    test_cost = lstm_lm.pred_cost(test, kf_test)
 
-    print('Train ', train_err, 'Valid ', valid_err, 'Test ', test_err)
+    print('Train ', train_cost, 'Valid ', valid_cost, 'Test ', test_cost)
 
     if save_to:
-        numpy.savez(save_to, train_err=train_err,
-                    valid_err=valid_err, test_err=test_err,
+        numpy.savez(save_to, train_cost=train_cost,
+                    valid_cost=valid_cost, test_cost=test_cost,
                     history_errs=history_errs, **best_p)
-    print('The code run for %d epochs, with %f epochs/sec' %
+    print('The code run for %d epochs, with %f secs/epoch' %
           ((eidx + 1), ((end_time - start_time) / (1. * (eidx + 1)))))
     print('Training took %.1fs' % (end_time - start_time))
-    return train_err, valid_err, test_err
+    return train_cost, valid_cost, test_cost
 
 if __name__ == '__main__':
     train_lstm(
         max_epochs=100,
+        reload_model=True,
     )
