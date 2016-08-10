@@ -8,3 +8,4 @@ examples/test
 *.npz
 *.log
 venv
+sandbox
