@@ -48,14 +48,18 @@ class Dict(object):
         counts = wordcount.values()
         keys = wordcount.keys()
         self.worddict = dict()
+        self.reverse_worddict = dict()
         self.worddict['<UNK>'] = 1
+        self.reverse_worddict[1] = '<UNK>'
         self.worddict['<PAD>'] = 0
+        self.reverse_worddict[0] = '<PAD>'
         # Reverse and truncate at max_words
         sorted_idx = numpy.argsort(counts)[::-1][:n_words]
         for idx_, ss_ in enumerate(sorted_idx):
             if keys[ss_] == '<UNK>':
                 continue
             self.worddict[keys[ss_]] = idx_ + 2
+            self.reverse_worddict[idx_ + 2] = keys[ss_]
 
         self.n_words = len(self.worddict)
 
@@ -119,3 +123,16 @@ class Dict(object):
         Returns the number of words in the vocabulary
         """
         return self.n_words
+
+    def idx_to_words(self, idx_arr):
+        """
+        """
+        results = []
+        for col in idx_arr:
+            sentence = []
+            for k in col:
+                sentence.append(self.reverse_worddict[k])
+            results.append(" ".join(sentence))
+
+        return results
+
