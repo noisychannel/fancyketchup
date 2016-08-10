@@ -35,10 +35,10 @@ class PTB(DataInterface):
             train = new_train
 
         if sort_by_len:
-            sorted_index = du.len_argsort(test)
-            test = [test[i] for i in sorted_index]
+            sorted_index = du.len_argsort(train)
+            train = [train[i] for i in sorted_index]
             sorted_index = du.len_argsort(valid)
-            test = [valid[i] for i in sorted_index]
+            valid = [valid[i] for i in sorted_index]
             sorted_index = du.len_argsort(test)
             test = [test[i] for i in sorted_index]
 
