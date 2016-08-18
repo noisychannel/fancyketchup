@@ -41,7 +41,7 @@ class NIST_CS_EN(DataInterface):
             new_train_x = []
             new_train_y = []
             for x, y in zip(train_x, train_y):
-                if len(x) < maxlen:
+                if len(x) < maxlen and len(y) < maxlen:
                     new_train_x.append(x)
                     new_train_y.append(y)
             train_x = new_train_x
