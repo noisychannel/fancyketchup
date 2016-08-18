@@ -66,16 +66,19 @@ class LSTM(object):
         """
         # Make sure that we've initialized the tparams
         assert len(self.tparams) > 0
-        # State below : steps x samples
-        # Recurrence over dim 0
+        # State below : steps x samples x dim_proj
+        # If n_steps is not provided, infer it
         if n_steps is None:
             nsteps = state_below.shape[0]
         else:
-            nsteps = n_steps
-
-        if n_steps is not None and output_to_input_func is None:
-            raise Exception('n_steps was given to the LSTM but no output \
-                             to input function was specified')
+            # If n_steps is provided, this is the incomplete input setting
+            # Make sure that a function is provided to transform output
+            # from previous time step to input
+            # TODO: This output function may require input from several time
+            # steps instead of just the previous one. Make this modification
+            if output_to_input_func is None:
+                raise Exception('n_steps was given to the LSTM but no output \
+                                 to input function was specified')
 
         # Hack to make sure that the theano ifelse compiles
         if output_to_input_func is None:
@@ -86,19 +89,15 @@ class LSTM(object):
             n_samples = state_below.shape[1]
         else:
             n_samples = 1
-
-        if mask is None:
             warnings.warn("You seem to be supplying single samples for \
                            recurrence. You may see speedup gains with using \
-                           batches instead. If your samples are equal length, \
-                           you may safely ignore this warning")
+                           batches instead.")
 
         def _slice(_x, n, dim):
             if _x.ndim == 3:
                 return _x[:, :, n * dim:(n + 1) * dim]
             return _x[:, n * dim:(n + 1) * dim]
 
-        #def _step(m_, x_, h_, c_):
         def _step(t_, h_, c_, mask, state_below):
             """
             m_ is the mask for this timestep (N x 1)
@@ -130,7 +129,7 @@ class LSTM(object):
             # context when the mask value is 0
             # This will ensure that values generated for absent
             # elements marked with <PAD> will not be used
-            # Similarrly, Where the mask value is 1, use the value of the current
+            # Similarly, Where the mask value is 1, use the value of the current
             # hidden state, otherwise use the one from the previous
             # state when the mask value is 0
             c = ifelse(T.lt(t_, state_below.shape[0]),
@@ -139,8 +138,6 @@ class LSTM(object):
             h = ifelse(T.lt(t_, state_below.shape[0]),
                        mask[t_][:, None] * h + (1. - mask[t_])[:, None] * h_,
                        c)
-            #c = m_[:, None] * c + (1. - m_)[:, None] * c_
-            #h = m_[:, None] * h + (1. - m_)[:, None] * h_
 
             return h, c
 

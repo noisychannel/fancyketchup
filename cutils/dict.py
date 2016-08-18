@@ -126,6 +126,7 @@ class Dict(object):
 
     def idx_to_words(self, idx_arr):
         """
+        idx_array is TxN. Each col is a sentence
         """
         results = []
         for col in idx_arr:
