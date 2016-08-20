@@ -154,7 +154,6 @@ def train_lstm(
 
                 if numpy.mod(uidx, valid_freq) == 0:
                     use_noise.set_value(0.)
-                    train_cost = lstm_lm.pred_cost(train, kf)
                     valid_cost = lstm_lm.pred_cost(valid, kf_valid)
                     test_cost = lstm_lm.pred_cost(test, kf_test)
                     history_errs.append([valid_cost, test_cost])
@@ -164,7 +163,7 @@ def train_lstm(
                         best_p = unzip(lstm_lm.tparams)
                         bad_counter = 0
 
-                    print(('Train ', train_cost, 'Valid ', valid_cost,
+                    print(('Valid ', valid_cost,
                            'Test ', test_cost))
                     print("Some sentences.. ")
                     print(ptb_data.dictionary.idx_to_words(lstm_lm.f_decode(decode_sentences, decode_mask, model_options['maxlen'])))
