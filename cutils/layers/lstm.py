@@ -76,6 +76,7 @@ class LSTM(object):
             # from previous time step to input
             # TODO: This output function may require input from several time
             # steps instead of just the previous one. Make this modification
+            nsteps = n_steps
             if output_to_input_func is None:
                 raise Exception('n_steps was given to the LSTM but no output \
                                  to input function was specified')
