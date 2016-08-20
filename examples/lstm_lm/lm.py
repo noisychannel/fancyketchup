@@ -44,9 +44,14 @@ class LSTM_LM(object):
         unpack(word_dict.params, self.params)
         unpack(word_dict.tparams, self.tparams)
         # Initialize LSTM and add its params
-        self.layers['lstm'] = LSTM(dim_proj, self.rng)
-        unpack(self.layers['lstm'].params, self.params)
-        unpack(self.layers['lstm'].tparams, self.tparams)
+        # Layer 1
+        self.layers['lstm_1'] = LSTM(dim_proj, self.rng)
+        unpack(self.layers['lstm_1'].params, self.params)
+        unpack(self.layers['lstm_1'].tparams, self.tparams)
+        # Layer 2
+        self.layers['lstm_2'] = LSTM(dim_proj, self.rng)
+        unpack(self.layers['lstm_2'].params, self.params)
+        unpack(self.layers['lstm_2'].tparams, self.tparams)
         # Initialize other params
         other_params = OrderedDict()
         other_params['U'] = 0.01 * numpy.random.randn(dim_proj, ydim) \
@@ -62,20 +67,24 @@ class LSTM_LM(object):
         x = T.matrix('x', dtype='int64')
         # Since we are simply predicting the next word, the
         # following statement shifts the content of the x by 1
-        # in the time dimension for prediction (axis 0, assuming TxNxV)
+        # in the time dimension for prediction (axis 0, assuming TxN)
         y = T.roll(x, -1, 0)
         mask = T.matrix('mask', dtype=theano.config.floatX)
 
         n_timesteps = x.shape[0]
         n_samples = x.shape[1]
 
+        # Convert word indices to their embeddings
+        # Resulting dims are (T x N x dim_proj)
         emb = self.tparams['Wemb'][x.flatten()].reshape([n_timesteps,
                                                          n_samples,
                                                          self.dim_proj])
-        proj = self.layers['lstm'].lstm_layer(emb, self.dim_proj, mask=mask)
-        # Apply the mask to the final output to 0 out the time steps that are invalid
-        # TODO, this should probably be set to 1? 
-        proj = proj * mask[:, :, None]
+        # Compute the hidden states
+        # Note that these contain hidden states for elements which were
+        # padded in input. The cost for these time steps are removed
+        # before the calculation of the cost.
+        proj_1 = self.layers['lstm_1'].lstm_layer(emb, self.dim_proj, mask=mask)
+        proj = self.layers['lstm_2'].lstm_layer(proj_1, self.dim_proj, mask=mask)
         if use_dropout:
             trng = RandomStreams(self.random_seed)
             proj = dropout_layer(proj, use_noise, trng)
@@ -85,18 +94,19 @@ class LSTM_LM(object):
         # TxNxV. So we reshape it to (T*N)xV, apply softmax and reshape again
         # -1 is a proxy for infer dim based on input (numpy style)
         pre_s_r = T.reshape(pre_s, (pre_s.shape[0] * pre_s.shape[1], -1))
-        # Softmax will receive all-0s for previously padded entries
         pred_r = T.nnet.softmax(pre_s_r)
-        pred = T.reshape(pred_r, pre_s.shape)
 
         off = 1e-8
-        if pred.dtype == 'float16':
+        if pred_r.dtype == 'float16':
             off = 1e-6
 
         # Note the use of flatten here. We can't directly index a 3-tensor
         # and hence we use the (T*N)xV view which is indexed by the flattened
         # label matrix, dim = (T*N)x1
-        cost = -T.log(pred_r[T.arange(pred_r.shape[0]), y.flatten()] + off).mean()
+        # Also, the cost (before calculating the mean) is multiplied (element-wise)
+        # with the mask to eliminate the cost of elements that do not really exist.
+        # i.e. Do not include the cost for elements which are padded
+        cost = -T.sum(T.log(pred_r[T.arange(pred_r.shape[0]), y.flatten()] + off) * mask.flatten()) / T.sum(mask)
 
         self.f_cost = theano.function([x, mask], cost, name='f_cost')
 
@@ -104,27 +114,29 @@ class LSTM_LM(object):
 
 
     def build_decode(self):
+        # Input to start the recurrence with
         x = T.matrix('x', dtype='int64')
+        # This mask has to be all 1s.
+        # It does not make sense to complete a sentence for which
+        # The mask is 1 1 0 (because it's already complete).
+        mask = T.matrix('mask', dtype=theano.config.floatX)
         emb = self.tparams['Wemb'][x.flatten()].reshape([x.shape[0],
                                                          x.shape[1],
                                                          self.dim_proj])
-        mask = T.matrix('mask', dtype=theano.config.floatX)
+        # Number of steps we want the recurrence to run for
         n_timesteps = T.iscalar('n_time')
         n_samples = x.shape[1]
 
         def output_to_input_transform(output):
             """
-            TODO:t_mask is the mask for the current time step, shape=(Nx1)
-            probably required
+            output : The previous hidden state (Nxd)
             """
-            ## N x dim
-            #output = output * previous_mask[:, None]
-            # N X y_dim
+            # N X V
             pre_soft = T.dot(output, self.tparams['U']) + self.tparams['b']
-            # Softmax will receive all-0s for previously padded entries
             pred = T.nnet.softmax(pre_soft)
             # N x 1
             pred_argmax = pred.argmax(axis=1)
+            # N x d (flatten is probably redundant)
             new_input = self.tparams['Wemb'][pred_argmax.flatten()].reshape([n_samples,
                                                                        self.dim_proj])
             return new_input
@@ -137,7 +149,9 @@ class LSTM_LM(object):
         # -1 is a proxy for infer dim based on input (numpy style)
         pre_s_r = T.reshape(pre_s, (pre_s.shape[0] * pre_s.shape[1], -1))
         # Softmax will receive all-0s for previously padded entries
+        # (T*N) x V
         pred_r = T.nnet.softmax(pre_s_r)
+        # T x N
         pred = T.reshape(pred_r, pre_s.shape).argmax(axis=2)
         self.f_decode = theano.function([x, mask, n_timesteps], pred, name='f_decode')
 

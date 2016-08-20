@@ -22,17 +22,10 @@ class PTB(DataInterface):
         self.build_dict(n_words)
         print("... Done building dictionary")
 
-    def load_data(self, maxlen=None, sort_by_len=True):
+    def load_data(self, sort_by_len=True):
         train = self.grab_data(('%s/ptb.train.txt' % self.dataset_path))
         valid = self.grab_data(('%s/ptb.valid.txt' % self.dataset_path))
         test = self.grab_data(('%s/ptb.test.txt' % self.dataset_path))
-
-        if maxlen is not None:
-            new_train = []
-            for x in train:
-                if len(x) < maxlen:
-                    new_train.append(x)
-            train = new_train
 
         if sort_by_len:
             sorted_index = du.len_argsort(train)

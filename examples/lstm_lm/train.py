@@ -42,8 +42,8 @@ def train_lstm(
     load_from='lstm_model.96.npz',
     valid_freq=370,
     save_freq=1110,
-    maxlen=100,
-    batch_size=16,
+    maxlen=35,
+    batch_size=20,
     valid_batch_size=64,
     dataset='../../data/simple-examples/data',
     noise_std=0.,
@@ -56,10 +56,8 @@ def train_lstm(
     print("... Loading data")
     ptb_data = ptb.PTB(dataset, n_words=n_words,
                        emb_dim=model_options['dim_proj'])
-    train, valid, test = ptb_data.load_data(maxlen=maxlen)
+    train, valid, test = ptb_data.load_data()
     print("... Done loading data")
-
-    # Random shuffle of the test set. Why? TODO
 
     ydim = ptb_data.dictionary.n_words
     model_options['ydim'] = ydim
@@ -128,7 +126,8 @@ def train_lstm(
                 x = [train[t] for t in train_index]
 
                 # Convert to shape (minibatch maxlen, n samples)
-                x, mask, _ = pad_and_mask(x)
+                # Truncated backprop
+                x, mask, _ = pad_and_mask(x, maxlen=maxlen)
                 n_samples += x.shape[1]
 
                 cost = f_grad_shared(x, mask)
@@ -213,5 +212,5 @@ def train_lstm(
 if __name__ == '__main__':
     train_lstm(
         max_epochs=100,
-        reload_model=True,
+        #reload_model=True,
     )
