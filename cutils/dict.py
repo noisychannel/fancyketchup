@@ -129,7 +129,7 @@ class Dict(object):
         idx_array is TxN. Each col is a sentence
         """
         results = []
-        for col in idx_arr:
+        for col in idx_arr.T:
             sentence = []
             for k in col:
                 sentence.append(self.reverse_worddict[k])
