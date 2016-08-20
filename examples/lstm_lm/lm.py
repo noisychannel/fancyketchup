@@ -22,7 +22,7 @@ class LSTM_LM(object):
         return '%s_%s' % (pp, name)
 
 
-    def __init__(self, dim_proj, ydim, word_dict, random_seed):
+    def __init__(self, dim_proj, ydim, word_dict, random_seed, use_dropout=True):
         """
         Embedding and classifier params
         """
@@ -35,6 +35,7 @@ class LSTM_LM(object):
         self.tparams = OrderedDict()
         self.f_cost = None
         self.f_decode = None
+        self.use_dropout = use_dropout
 
         def unpack(source, target):
             for kk, vv in source.items():
@@ -45,11 +46,11 @@ class LSTM_LM(object):
         unpack(word_dict.tparams, self.tparams)
         # Initialize LSTM and add its params
         # Layer 1
-        self.layers['lstm_1'] = LSTM(dim_proj, self.rng)
+        self.layers['lstm_1'] = LSTM(dim_proj, self.rng, prefix='lstm_1')
         unpack(self.layers['lstm_1'].params, self.params)
         unpack(self.layers['lstm_1'].tparams, self.tparams)
         # Layer 2
-        self.layers['lstm_2'] = LSTM(dim_proj, self.rng)
+        self.layers['lstm_2'] = LSTM(dim_proj, self.rng, prefix='lstm_2')
         unpack(self.layers['lstm_2'].params, self.params)
         unpack(self.layers['lstm_2'].tparams, self.tparams)
         # Initialize other params
@@ -62,7 +63,8 @@ class LSTM_LM(object):
         unpack(other_tparams, self.tparams)
 
 
-    def build_model(self, use_dropout=True):
+    def build_model(self):
+        trng = RandomStreams(self.random_seed)
         use_noise = theano.shared(numpy_floatX(0.))
         x = T.matrix('x', dtype='int64')
         # Since we are simply predicting the next word, the
@@ -84,9 +86,11 @@ class LSTM_LM(object):
         # padded in input. The cost for these time steps are removed
         # before the calculation of the cost.
         proj_1 = self.layers['lstm_1'].lstm_layer(emb, self.dim_proj, mask=mask)
+        # Use dropout on non-recurrent connections (Zaremba et al.)
+        if self.use_dropout:
+            proj_1 = dropout_layer(proj_1, use_noise, trng)
         proj = self.layers['lstm_2'].lstm_layer(proj_1, self.dim_proj, mask=mask)
-        if use_dropout:
-            trng = RandomStreams(self.random_seed)
+        if self.use_dropout:
             proj = dropout_layer(proj, use_noise, trng)
 
         pre_s = T.dot(proj, self.tparams['U']) + self.tparams['b']
@@ -115,17 +119,25 @@ class LSTM_LM(object):
 
     def build_decode(self):
         # Input to start the recurrence with
+        trng = RandomStreams(self.random_seed)
+        use_noise = theano.shared(numpy_floatX(0.))
         x = T.matrix('x', dtype='int64')
-        # This mask has to be all 1s.
+        # Number of steps we want the recurrence to run for
+        n_timesteps = T.iscalar('n_timesteps')
+        n_samples = x.shape[1]
+
+        # The mask for the first layer has to be all 1s.
         # It does not make sense to complete a sentence for which
         # The mask is 1 1 0 (because it's already complete).
         mask = T.matrix('mask', dtype=theano.config.floatX)
+        # This is a dummy mask, we want to consider all hidden states for
+        # the second layer when decoding
+        mask_2 = T.alloc(numpy_floatX(1.),
+                         n_timesteps,
+                         n_samples)
         emb = self.tparams['Wemb'][x.flatten()].reshape([x.shape[0],
                                                          x.shape[1],
                                                          self.dim_proj])
-        # Number of steps we want the recurrence to run for
-        n_timesteps = T.iscalar('n_time')
-        n_samples = x.shape[1]
 
         def output_to_input_transform(output):
             """
@@ -141,8 +153,14 @@ class LSTM_LM(object):
                                                                        self.dim_proj])
             return new_input
 
-        proj = self.layers['lstm'].lstm_layer(emb, self.dim_proj, mask=mask, n_steps=n_timesteps,
+        proj_1 = self.layers['lstm_1'].lstm_layer(emb, self.dim_proj, mask=mask, n_steps=n_timesteps,
                                                output_to_input_func=output_to_input_transform)
+        if self.use_dropout:
+            proj_1 = dropout_layer(proj_1, use_noise, trng)
+        proj = self.layers['lstm_2'].lstm_layer(proj_1, self.dim_proj, mask=mask_2)
+        if self.use_dropout:
+            proj = dropout_layer(proj, use_noise, trng)
+
         pre_s = T.dot(proj, self.tparams['U']) + self.tparams['b']
         # Softmax works for 2-tensors (matrices) only. We have a 3-tensor
         # TxNxV. So we reshape it to (T*N)xV, apply softmax and reshape again
@@ -155,7 +173,7 @@ class LSTM_LM(object):
         pred = T.reshape(pred_r, pre_s.shape).argmax(axis=2)
         self.f_decode = theano.function([x, mask, n_timesteps], pred, name='f_decode')
 
-        return x, mask, n_timesteps
+        return use_noise, x, mask, n_timesteps
 
 
     def pred_cost(self, data, iterator, verbose=False):

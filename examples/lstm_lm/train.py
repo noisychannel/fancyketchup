@@ -29,7 +29,7 @@ numpy.random.seed(SEED)
 
 
 def train_lstm(
-    dim_proj=128,
+    dim_proj=650,
     patience=10,
     max_epochs=5000,
     disp_freq=10,
@@ -87,7 +87,8 @@ def train_lstm(
     f_grad_shared, f_update = optimizer(lr, lstm_lm.tparams, grads, cost, x, mask)
 
     # Keep a few sentences to decode, to see how training is performing
-    lstm_lm.build_decode()
+    decode_use_noise, _, _, _ = lstm_lm.build_decode()
+    decode_use_noise.set_value(1.)
     decode_sentences = ['with the', 'the cat', 'when the']
     decode_sentences = [ptb_data.dictionary.read_sentence(s) for s in decode_sentences]
     decode_sentences, decode_mask, _ = pad_and_mask(decode_sentences)
