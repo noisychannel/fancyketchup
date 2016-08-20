@@ -14,35 +14,27 @@ def pad_and_mask(seqs, labels=None, maxlen=None):
     if maxlen is set, we will cut all sequence to this maximum
     lenght.
 
-    this swap the axis!
+    this swaps the axis!
     """
     # x: a list of sentences
     lengths = [len(s) for s in seqs]
-
     if maxlen is not None:
-        accepted_idx = [i_ for i_, l in enumerate(lengths) if l < maxlen]
-        seqs = [seqs[i_] for i_ in accepted_idx]
-        lengths = [lengths[i_] for i_ in accepted_idx]
-        if labels is not None:
-            labels = [labels[i_] for i_ in accepted_idx]
-        # Make sure we have some samples left
-        assert len(lengths) > 0
+        # Typically the case with truncated backprop
+        if numpy.max(lengths) < maxlen:
+            maxlen = numpy.max(lengths)
+    else:
+        maxlen = numpy.max(lengths)
 
     n_samples = len(seqs)
-    maxlen = numpy.max(lengths)
 
     x = numpy.zeros((maxlen, n_samples)).astype('int64')
     x_mask = numpy.zeros((maxlen, n_samples)).astype(theano.config.floatX)
     y = labels
     #TODO : Handle the case where labels are a matrix (many to many)
-    #if labels is not None:
-        #if type(labels[0]) is list:
-            #y = numpy.zeros((maxlen, n_samples)).astype(theano.config.floatX)
-            #for idx, y_ in enumerate(labels):
-                #y[:lengths[idx], idx] = y_
     for idx, s in enumerate(seqs):
-        x[:lengths[idx], idx] = s
-        x_mask[:lengths[idx], idx] = 1.
+        s_len = lengths[idx] if lengths[idx] < maxlen else maxlen
+        x[:s_len, idx] = s[:maxlen]
+        x_mask[:s_len, idx] = 1.
 
     return x, x_mask, y
 
