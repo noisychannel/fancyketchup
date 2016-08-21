@@ -1,5 +1,5 @@
 """
-Training for the translation encoder-decoder
+Training for the LSTM-LM
 """
 
 from __future__ import print_function
@@ -21,15 +21,15 @@ from cutils.training.trainer import adadelta
 script_path = os.path.dirname(os.path.realpath(__file__))
 sys.path.append(script_path)
 
-import nist_cs_en
-from enc_dec import ENCODER_DECODER
+import ptb
+from lm import LSTM_LM
 
 SEED = 123
 numpy.random.seed(SEED)
 
 
 def train_lstm(
-    dim_proj=128,
+    dim_proj=650,
     patience=10,
     max_epochs=5000,
     disp_freq=10,
@@ -42,10 +42,10 @@ def train_lstm(
     load_from='lstm_model.96.npz',
     valid_freq=370,
     save_freq=1110,
-    maxlen=100,
-    batch_size=16,
+    maxlen=35,
+    batch_size=20,
     valid_batch_size=64,
-    dataset='/export/ws15-mt-data2/gkumar/corpora/data/largest',
+    dataset='../../data/simple-examples/data',
     noise_std=0.,
     use_dropout=True,
     reload_model=False,
@@ -54,28 +54,27 @@ def train_lstm(
     print("model options", model_options)
 
     print("... Loading data")
-    nist_data = nist_cs_en.NIST_CS_EN(dataset, src_n_words=n_words, tgt_n_words=n_words,
-                                      src_emb_dim=model_options['dim_proj'],
-                                      tgt_emb_dim=model_options['dim_proj'])
-    train, valid, test = ptb_data.load_data(maxlen=maxlen)
+    ptb_data = ptb.PTB(dataset, n_words=n_words,
+                       emb_dim=model_options['dim_proj'])
+    train, valid, test = ptb_data.load_data()
     print("... Done loading data")
 
-    ydim = nist_data.tgt_dictionary.n_words
+    ydim = ptb_data.dictionary.n_words
     model_options['ydim'] = ydim
 
     print('Building model')
     # Create the initial parameters for the model
-    model = ENCODER_DECODER(model_options['dim_proj'], ydim,
-                            nist_data.src_dictionary, SEED)
+    lstm_lm = LSTM_LM(model_options['dim_proj'], ydim,
+                      ptb_data.dictionary, SEED)
 
     if reload_model:
         print('Reloading params from %s' % save_to)
-        load_params(load_from, model.params)
+        load_params(load_from, lstm_lm.params)
         # Update the tparams with the new values
-        zipp(model.params, model.tparams)
+        zipp(lstm_lm.params, lstm_lm.tparams)
 
     # Create the shared variables for the model
-    (use_noise, x, mask, cost) = model.build_model()
+    (use_noise, x, mask, cost) = lstm_lm.build_model()
 
     if decay_c > 0.:
         cost += weight_decay(cost, lstm_lm.tparams['U'], decay_c)
@@ -88,7 +87,8 @@ def train_lstm(
     f_grad_shared, f_update = optimizer(lr, lstm_lm.tparams, grads, cost, x, mask)
 
     # Keep a few sentences to decode, to see how training is performing
-    lstm_lm.build_decode()
+    decode_use_noise, _, _, _ = lstm_lm.build_decode()
+    decode_use_noise.set_value(1.)
     decode_sentences = ['with the', 'the cat', 'when the']
     decode_sentences = [ptb_data.dictionary.read_sentence(s) for s in decode_sentences]
     decode_sentences, decode_mask, _ = pad_and_mask(decode_sentences)
@@ -127,7 +127,8 @@ def train_lstm(
                 x = [train[t] for t in train_index]
 
                 # Convert to shape (minibatch maxlen, n samples)
-                x, mask, _ = pad_and_mask(x)
+                # Truncated backprop
+                x, mask, _ = pad_and_mask(x, maxlen=maxlen)
                 n_samples += x.shape[1]
 
                 cost = f_grad_shared(x, mask)
@@ -153,7 +154,6 @@ def train_lstm(
 
                 if numpy.mod(uidx, valid_freq) == 0:
                     use_noise.set_value(0.)
-                    train_cost = lstm_lm.pred_cost(train, kf)
                     valid_cost = lstm_lm.pred_cost(valid, kf_valid)
                     test_cost = lstm_lm.pred_cost(test, kf_test)
                     history_errs.append([valid_cost, test_cost])
@@ -163,7 +163,7 @@ def train_lstm(
                         best_p = unzip(lstm_lm.tparams)
                         bad_counter = 0
 
-                    print(('Train ', train_cost, 'Valid ', valid_cost,
+                    print(('Valid ', valid_cost,
                            'Test ', test_cost))
                     print("Some sentences.. ")
                     print(ptb_data.dictionary.idx_to_words(lstm_lm.f_decode(decode_sentences, decode_mask, model_options['maxlen'])))
@@ -212,5 +212,5 @@ def train_lstm(
 if __name__ == '__main__':
     train_lstm(
         max_epochs=100,
-        reload_model=True,
+        #reload_model=True,
     )
