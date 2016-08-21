@@ -40,6 +40,10 @@ class LSTM(object):
         params[_p(prefix, 'b')] = b.astype(theano.config.floatX)
         self.param_names.append(_p(prefix, 'b'))
 
+        # Memory of the last final hidden states
+        # Not archived
+        self.h_final = None
+
         self.prefix = prefix
         self.params = params
         self.tparams = init_tparams(params)
@@ -49,7 +53,8 @@ class LSTM(object):
             self.tparams[p] = tparams[p]
 
     def lstm_layer(self, state_below, dim_proj, mask=None,
-                   n_steps=None, output_to_input_func=None):
+                   n_steps=None, output_to_input_func=None,
+                   restore_final_to_initial_hidden=False):
         """
         Recurrence with an LSTM hidden unit
 
@@ -63,6 +68,14 @@ class LSTM(object):
                   applied to the previous output and is then used as input
         output_to_input_func : The function to be applied to generate input
                                when partial input is available
+        restore_final_to_initial_hidden : Use the final hidden state as the initial
+                                  hidden state for the next batch
+                                  WARNING : Assumes that batches are of the
+                                  same size since the size of the initial
+                                  state is fixed to Nxd
+                                  TODO: Possibly think about averaging
+                                  final states to make this number of sample
+                                  independent
         """
         # Make sure that we've initialized the tparams
         assert len(self.tparams) > 0
@@ -93,6 +106,15 @@ class LSTM(object):
             warnings.warn("You seem to be supplying single samples for \
                            recurrence. You may see speedup gains with using \
                            batches instead.")
+
+        # Initialize initial hidden state if not specified
+        # Restore final hidden state to new initial hidden state
+        if restore_final_to_initial_hidden and self.h_final is not None:
+            h0 = self.h_final
+        else:
+            h0 = T.alloc(numpy_floatX(0.),
+                         n_samples,
+                         dim_proj)
 
         def _slice(_x, n, dim):
             if _x.ndim == 3:
@@ -146,15 +168,17 @@ class LSTM(object):
                        self.tparams[_p(self.prefix, 'b')])
         rval, updates = theano.scan(_step,
                                     sequences=[T.arange(nsteps)],
-                                    outputs_info=[T.alloc(numpy_floatX(0.),
-                                                          n_samples,
-                                                          dim_proj),
+                                    outputs_info=[h0,
                                                   T.alloc(numpy_floatX(0.),
                                                           n_samples,
                                                           dim_proj)],
                                     non_sequences=[mask, state_below],
                                     name=_p(self.prefix, '_layers'),
                                     n_steps=nsteps)
+        # Save the final state to be used as the next initial hidden state
+        if restore_final_to_initial_hidden:
+            self.h_final = rval[0][-1]
+
         # Returns a list of the hidden states (t elements of N x dim_proj)
         return rval[0]
 
