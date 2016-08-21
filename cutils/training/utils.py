@@ -4,7 +4,7 @@ import theano
 from cutils.numeric import numpy_floatX
 
 
-def get_minibatches_idx(n, minibatch_size, shuffle=False):
+def get_minibatches_idx(n, minibatch_size, shuffle=False, use_remaining=True):
     """
     Used to shuffle the dataset at each iteration
     """
@@ -19,7 +19,7 @@ def get_minibatches_idx(n, minibatch_size, shuffle=False):
                                     minibatch_start + minibatch_size])
         minibatch_start += minibatch_size
 
-    if (minibatch_size != n):
+    if (minibatch_size != n) and use_remaining:
         # Put the remaining samples in a minibatch
         minibatches.append(idx_list[minibatch_start:])
 
