@@ -1,5 +1,5 @@
 """
-Build a tweet sentiment analyzer
+An LSTM language model
 """
 
 from __future__ import print_function
@@ -85,11 +85,13 @@ class LSTM_LM(object):
         # Note that these contain hidden states for elements which were
         # padded in input. The cost for these time steps are removed
         # before the calculation of the cost.
-        proj_1 = self.layers['lstm_1'].lstm_layer(emb, self.dim_proj, mask=mask)
+        proj_1 = self.layers['lstm_1'].lstm_layer(emb, self.dim_proj, mask=mask,
+                                                  restore_final_to_initial_hidden=True)
         # Use dropout on non-recurrent connections (Zaremba et al.)
         if self.use_dropout:
             proj_1 = dropout_layer(proj_1, use_noise, trng)
-        proj = self.layers['lstm_2'].lstm_layer(proj_1, self.dim_proj, mask=mask)
+        proj = self.layers['lstm_2'].lstm_layer(proj_1, self.dim_proj, mask=mask,
+                                                restore_final_to_initial_hidden=True)
         if self.use_dropout:
             proj = dropout_layer(proj, use_noise, trng)
 
@@ -170,7 +172,7 @@ class LSTM_LM(object):
         # (T*N) x V
         pred_r = T.nnet.softmax(pre_s_r)
         # T x N
-        pred = T.reshape(pred_r, pre_s.shape).argmax(axis=2)
+        pred = (T.reshape(pred_r, pre_s.shape)[:,:,2:]).argmax(axis=2) + 2
         self.f_decode = theano.function([x, mask, n_timesteps], pred, name='f_decode')
 
         return use_noise, x, mask, n_timesteps

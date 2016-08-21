@@ -118,7 +118,8 @@ def train_lstm(
         for eidx in range(max_epochs):
             n_samples = 0
             # Get shuffled index for the training set
-            kf = get_minibatches_idx(len(train), batch_size, shuffle=True)
+            kf = get_minibatches_idx(len(train), batch_size,
+                                     shuffle=True, use_remaining=False)
             for _, train_index in kf:
                 uidx += 1
                 use_noise.set_value(1.)
@@ -212,5 +213,6 @@ def train_lstm(
 if __name__ == '__main__':
     train_lstm(
         max_epochs=100,
+        save_to='lstm_model_1.npz',
         #reload_model=True,
     )
