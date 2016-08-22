@@ -81,6 +81,10 @@ class LSTM_LM(object):
         emb = self.tparams['Wemb'][x.flatten()].reshape([n_timesteps,
                                                          n_samples,
                                                          self.dim_proj])
+        # Dropout input if necessary
+        if self.use_dropout:
+            emb = dropout_layer(emb, use_noise, trng)
+
         # Compute the hidden states
         # Note that these contain hidden states for elements which were
         # padded in input. The cost for these time steps are removed

@@ -15,7 +15,7 @@ import theano.tensor as T
 from cutils.training.utils import get_minibatches_idx, weight_decay
 from cutils.params.utils import zipp, unzip, load_params
 from cutils.data_interface.utils import pad_and_mask
-from cutils.training.trainer import adadelta
+from cutils.training.trainer import adadelta, sgd
 
 # Include current path in the pythonpath
 script_path = os.path.dirname(os.path.realpath(__file__))
@@ -49,6 +49,8 @@ def train_lstm(
     noise_std=0.,
     use_dropout=True,
     reload_model=False,
+    decay_lr_after_ep=None,
+    decay_lr_factor=1.
 ):
     model_options = locals().copy()
     print("model options", model_options)
@@ -89,7 +91,7 @@ def train_lstm(
     # Keep a few sentences to decode, to see how training is performing
     decode_use_noise, _, _, _ = lstm_lm.build_decode()
     decode_use_noise.set_value(1.)
-    decode_sentences = ['with the', 'the cat', 'when the']
+    decode_sentences = ['<BOS> with the', '<BOS> the cat', '<BOS> the meaning']
     decode_sentences = [ptb_data.dictionary.read_sentence(s) for s in decode_sentences]
     decode_sentences, decode_mask, _ = pad_and_mask(decode_sentences)
 
@@ -178,6 +180,10 @@ def train_lstm(
                             break
 
             print('Seen %d samples' % n_samples)
+            # Decay learning rate
+            if (eidx + 1) >= decay_lr_after_ep:
+                lrate = lrate / decay_lr_factor
+                print('Learning rate is now : ', lrate)
 
             if estop:
                 break
@@ -212,7 +218,11 @@ def train_lstm(
 
 if __name__ == '__main__':
     train_lstm(
-        max_epochs=100,
-        save_to='lstm_model_1.npz',
-        #reload_model=True,
+        max_epochs=40,
+        save_to='lstm_model_zaremba.npz',
+        optimizer=sgd,
+        lrate=1.0,
+        decay_lr_after_ep=6,
+        decay_lr_factor=1.2,
+        maxlen=35,
     )
