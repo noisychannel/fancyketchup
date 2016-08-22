@@ -21,6 +21,8 @@ class Dict(object):
     Helper functions are available to get unigram noise distributions for the
     vocabulary (to be used with NCE).
     """
+    # pylint: disable=too-many-instance-attributes
+
     def __init__(self, sentences, n_words, emb_dim):
         """
         Initializes a dictionary.
@@ -35,7 +37,7 @@ class Dict(object):
             with UNK
 
         :type emb_dim: int
-        :param emb_dim: The dimension for the word embeddings
+        :param emb_dim: The dimensionality for the word embeddings
         """
         self.locked = False
         wordcount = dict()
@@ -75,7 +77,6 @@ class Dict(object):
         print("Total words retained = %d" % len(self.worddict))
 
         self.embedding_size = emb_dim
-        # TODO: Remove self.Wemb at some point, it should be part of params
         w_emb = self.initialize_embedding()
         params = OrderedDict()
         params['Wemb'] = w_emb
@@ -104,6 +105,8 @@ class Dict(object):
     def initialize_embedding(self):
         """
         Initializes the word embeddings from a uniform distribution
+
+        :returns: A numpy object with the random word embeddings (shape=V x emb_dim)
         """
         # TODO: Which random seed is used here?
         randn = numpy.random.rand(self.n_words, self.embedding_size)
@@ -116,6 +119,8 @@ class Dict(object):
 
         :type line: string
         :param line: The string to be read
+
+        :returns: A list of lists. Each nested list contains an integerized sequence.
         """
         line = line.strip().split()
         return [self.worddict[w] if w in self.worddict else 1 for w in line]
@@ -123,12 +128,19 @@ class Dict(object):
     def num_words(self):
         """
         Returns the number of words in the vocabulary
+
+        :returns: Integer representing the number of words in the vocab
         """
         return self.n_words
 
     def idx_to_words(self, idx_arr):
         """
-        idx_array is TxN. Each col is a sentence
+        Converts a matrix of integers into string tokens
+
+        :type idx_array: numpy.ndarray
+        :param idx_array: A T x N matrix. Each column is a sentence. Each row is a time step.
+
+        :returns: A list of word representations (string) for the cols in the input
         """
         results = []
         for col in idx_arr.T:
@@ -138,4 +150,3 @@ class Dict(object):
             results.append(" ".join(sentence))
 
         return results
-
