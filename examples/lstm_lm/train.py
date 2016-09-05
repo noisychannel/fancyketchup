@@ -8,6 +8,7 @@ import os
 import sys
 import time
 import pickle
+import argparse
 import numpy
 import theano
 import theano.tensor as T
@@ -46,7 +47,6 @@ def train_lstm(
     batch_size=20,
     valid_batch_size=64,
     dataset='../../data/simple-examples/data',
-    noise_std=0.,
     use_dropout=True,
     reload_model=False,
     decay_lr_after_ep=None,
@@ -70,7 +70,7 @@ def train_lstm(
                       ptb_data.dictionary, SEED)
 
     if reload_model:
-        print('Reloading params from %s' % save_to)
+        print('Reloading params from %s' % load_from)
         load_params(load_from, lstm_lm.params)
         # Update the tparams with the new values
         zipp(lstm_lm.params, lstm_lm.tparams)
@@ -217,12 +217,73 @@ def train_lstm(
     return train_cost, valid_cost, test_cost
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='LSTM Language Model \n \
+        Eg. python train.py --dataset ../../data/simple_examples/data --save-to lstm_model.npz')
+
+    parser.add_argument('--dim-proj', type=int, help='The size of the hidden states', default=650)
+    parser.add_argument('--patience', type=int, help='The patience value for early stopping. \
+        How many worse batch values are we willing to tolerate before we stop', default=200000)
+    parser.add_argument('--max-epochs', type=int, help='Maximum number of epochs', default=100)
+    parser.add_argument('--disp-freq', type=int, help='How often should we display the current cost \
+        (batch)', default=10)
+    parser.add_argument('--decay-c', type=float, help='Parameter for weight decay', default=0.)
+    parser.add_argument('--lrate', type=float, help='The initial learning rate. Ignored for \
+        adadelta', default=0.0001)
+    parser.add_argument('--n-words', type=int, help='The number of top words to retain in the vocab. \
+        Everything else is replaced by UNK', default=10000)
+    parser.add_argument('--optimizer', type=str, help='The optimizer to use for learning.', \
+        default=adadelta)
+    parser.add_argument('--encoder', type=str, help='The encoder to use', default='lstm')
+    parser.add_argument('--save-to', type=str, help='The location of the serialized learnt \
+        params.', required=True)
+    parser.add_argument('--load-from', type=str, help='To resume training, load params from \
+        this location. Only used when reload_model is True', default='')
+    parser.add_argument('--reload-model', type=bool, help='Resume training', default=False)
+    parser.add_argument('--valid-freq', type=int, help='How often should we validate against the \
+        valid set? Used for early stopping', default=370)
+    parser.add_argument('--save-freq', type=int, help='How ofen should we save our best params?', \
+        default=1110)
+    parser.add_argument('--maxlen', type=int, help='What is the maximum length of a train sequence \
+        we should accomodate? Equivalent to truncated backprop', default=35)
+    parser.add_argument('--batch-size', type=int, help='Batch size', default=20)
+    parser.add_argument('--valid-batch-size', type=int, help='Valid and test batch sizes', default=64)
+    parser.add_argument('--dataset', type=str, help='Location of the dataset', required=True)
+    parser.add_argument('--use-dropout', type=bool, help='Should we use dropout?', default=True)
+    parser.add_argument('--decay-lr-after-ep', type=int, help='After how many epochs should we \
+        start decaying the learning rate? Useful for SGD only', default=10000)
+    parser.add_argument('--decay-lr-factor', type=float, help='How much should we decay the learning \
+        rate by? Useful for SGD only.', default=1.2)
+
+    args = parser.parse_args()
+
+    if type(args.optimizer) == str:
+        if args.optimizer == 'sgd':
+            args.optimizer = sgd
+        elif args.optimizer == 'adadelta':
+            args.optimzer = adadelta
+        else:
+            raise NotImplementedError
+
     train_lstm(
-        max_epochs=40,
-        save_to='lstm_model_zaremba.npz',
-        optimizer=sgd,
-        lrate=1.0,
-        decay_lr_after_ep=6,
-        decay_lr_factor=1.2,
-        maxlen=35,
+        dim_proj=args.dim_proj,
+        patience=args.patience,
+        max_epochs=args.max_epochs,
+        disp_freq=args.disp_freq,
+        decay_c=args.decay_c,
+        lrate=args.lrate,
+        n_words=args.n_words,
+        optimizer=args.optimizer,
+        encoder=args.encoder,
+        save_to=args.save_to,
+        load_from=args.load_from,
+        valid_freq=args.valid_freq,
+        save_freq=args.save_freq,
+        maxlen=args.maxlen,
+        batch_size=args.batch_size,
+        valid_batch_size=args.valid_batch_size,
+        dataset=args.dataset,
+        use_dropout=args.use_dropout,
+        reload_model=args.reload_model,
+        decay_lr_after_ep=args.decay_lr_after_ep,
+        decay_lr_factor=args.decay_lr_factor
     )
