@@ -12,11 +12,12 @@ from cutils.numeric import numpy_floatX
 
 
 class LSTM(object):
-    def __init__(self, dim_proj, rng, prefix='lstm'):
+    def __init__(self, dim_proj, dim_input=None, prefix='lstm'):
         """
         Initialize the LSTM params
 
-        dim_proj : The embedding dimension of the input
+        dim_proj : The embedding dimension of the hidden layer
+        dim_input : The emedding dimension of the input
         """
         self.param_names = []
         params = OrderedDict()
@@ -44,6 +45,8 @@ class LSTM(object):
         # Not archived
         self.h_final = None
 
+        self.dim_proj = dim_proj
+
         self.prefix = prefix
         self.params = params
         self.tparams = init_tparams(params)
@@ -52,7 +55,7 @@ class LSTM(object):
         for p in self.param_names:
             self.tparams[p] = tparams[p]
 
-    def lstm_layer(self, state_below, dim_proj, mask=None,
+    def lstm_layer(self, state_below, mask=None,
                    n_steps=None, output_to_input_func=None,
                    restore_final_to_initial_hidden=False):
         """
@@ -114,7 +117,7 @@ class LSTM(object):
         else:
             h0 = T.alloc(numpy_floatX(0.),
                          n_samples,
-                         dim_proj)
+                         self.dim_proj)
 
         def _slice(_x, n, dim):
             if _x.ndim == 3:
@@ -140,10 +143,10 @@ class LSTM(object):
 
             # The input to the sigmoid is preact[:, :, 0:d]
             # Similar slices are used for the rest of the gates
-            i = T.nnet.sigmoid(_slice(preact, 0, dim_proj))
-            f = T.nnet.sigmoid(_slice(preact, 1, dim_proj))
-            o = T.nnet.sigmoid(_slice(preact, 2, dim_proj))
-            c = T.tanh(_slice(preact, 3, dim_proj))
+            i = T.nnet.sigmoid(_slice(preact, 0, self.dim_proj))
+            f = T.nnet.sigmoid(_slice(preact, 1, self.dim_proj))
+            o = T.nnet.sigmoid(_slice(preact, 2, self.im_proj))
+            c = T.tanh(_slice(preact, 3, self.dim_proj))
             c = f * c_ + i * c
             h = o * T.tanh(c)
             # None adds a dimension to the mask (N,) -> (N, 1)
@@ -160,7 +163,7 @@ class LSTM(object):
                        c)
             h = ifelse(T.lt(t_, state_below.shape[0]),
                        mask[t_][:, None] * h + (1. - mask[t_])[:, None] * h_,
-                       c)
+                       h)
 
             return h, c
 
@@ -171,7 +174,7 @@ class LSTM(object):
                                     outputs_info=[h0,
                                                   T.alloc(numpy_floatX(0.),
                                                           n_samples,
-                                                          dim_proj)],
+                                                          self.dim_proj)],
                                     non_sequences=[mask, state_below],
                                     name=_p(self.prefix, '_layers'),
                                     n_steps=nsteps)
