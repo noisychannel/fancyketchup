@@ -127,6 +127,14 @@ class GRU(object):
                            recurrence. You may see speedup gains with using \
                            batches instead.")
 
+        # Initialize mask if not specified
+        if mask is None:
+            if state_below.ndim == 3:
+                mask = T.alloc(numpy_floatX(1.),
+                               nsteps, n_samples)
+            else:
+                mask = T.alloc(numpy_floatX(1.), n_samples)
+
         # Initialize initial hidden state if not specified
         # Restore final hidden state to new initial hidden state
         if restore_final_to_initial_hidden and self.h_final is not None:
