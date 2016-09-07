@@ -31,6 +31,22 @@ def xavier_init(rng, n_in, n_out, activation, size=None):
     return W_values
 
 
+def norm_init(n_in, n_out, scale=0.01, ortho=True):
+    """
+    Initialize weights from a scaled standard normal distribution
+    Falls back to orthogonal weights if n_in = n_out
+
+    n_in : The input dimension
+    n_out : The output dimension
+    scale : Scale for the normal distribution
+    ortho : Fall back to ortho weights when n_in = n_out
+    """
+    if n_in == n_out and ortho:
+        return ortho_weight(n_in)
+    else:
+        return numpy_floatX(scale * numpy.random.randn(n_in, n_out))
+
+
 def ortho_weight(ndim):
     """
     Returns an orthogonal matrix via SVD decomp
