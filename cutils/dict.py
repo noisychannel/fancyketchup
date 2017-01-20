@@ -2,6 +2,9 @@
 Contains the dictionary class which is responible for maintaining the
 vocabulary and word embeddings
 """
+#TODO: The noise distribution gets created even for models that don't use it.
+#TODO: The lock function is not being used
+
 from __future__ import print_function
 from collections import OrderedDict
 

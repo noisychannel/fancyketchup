@@ -4,8 +4,8 @@ import numpy
 
 from cutils.loss_functions import negative_log_likelihood, zero_one_loss, \
     nce_binary_conditional_likelihood
-
-
+from cutils.params.init import norm_init
+from cutils.params.utils import init_tparams
 from cutils.regularization import L1, L2
 
 class LogisticRegression(object):
@@ -13,7 +13,7 @@ class LogisticRegression(object):
     Multi-class logistic regression
     """
 
-    def __init__(self, input, n_in, n_out):
+    def __init__(self, dim_proj, dim_input, prefix='logit', ortho=True):
         """
         Initializes the parameters of a Logistic regression model
 
@@ -27,58 +27,57 @@ class LogisticRegression(object):
         :param n_out: The dimensionality of the output (label) layer
         """
         # Initialize weight matrix with 0s. Size is n_in X n_out
-        self.W = theano.shared(
-            value=numpy.zeros(
-                (n_in, n_out),
-                dtype=theano.config.floatX,
-            ),
-            name='W',
-            borrow=True
-        )
-        # Initialize the bias vector to 0s. Size is n_out
-        self.b = theano.shared(
-            value=numpy.zeros(
-                (n_out,),
-                dtype=theano.config.floatX,
-            ),
-            name='b',
-            borrow=True
-        )
+        self.param_names = []
+        params = OrderedDict()
 
-        # Compute (symbolic) : softmax(x.W + b)
-        lin_output = T.dot(input, self.W) + self.b
-        # Parameters for batch normalization follow
-        self.gamma = theano.shared(
-            value=numpy.ones(
-                (n_out,),
-                dtype=theano.config.floatX), name='gamma')
-        self.beta = theano.shared(
-            value=numpy.zeros(
-                (n_out,),
-                dtype=theano.config.floatX), name='beta')
+        W = norm_init(dim_input, dim_proj, ortho)
+        params[_p(prefix, 'W')] = W
+        self.param_names.append(_p(prefix, 'W'))
 
-        # Apply batch normalization to the linear output
-        bn_output = T.nnet.batch_normalization(
-            inputs=lin_output,
-            gamma=self.gamma,
-            beta=self.beta,
-            mean=lin_output.mean((0,), keepdims=True),
-            std=T.ones_like(lin_output.var((0,), keepdims=True)),
-            mode='high_mem'
-        )
+        b = numpy_floatX(numpy.zeros(dim_proj,))
+        params[_p(prefix, 'b')] = b
+        self.param_names.append(_p(prefix, 'b'))
 
-        lin_output.std((0,))
+        # batch normalization params
+        gamma = numpy_floatX(numpy.ones((n_out,)))
+        params[_p(prefix, 'gamma')] = gamma
+        self.param_names.append(_p(prefix, 'gamma'))
 
-        self.lin_output = bn_output
+        beta = numpy_floatX(numpy.ones((n_out,)))
+        params[_p(prefix, 'beta')] = beta
+        self.param_names.append(_p(prefix, 'beta'))
 
+        self.prefix = prefix
+        self.params = params
+        self.tparams = init_tparams(params)
+
+        # Legacy params
         # Softmax components computed on demand
         self.p_y_given_x = None
         self.y_pred = None
+        self.lin_output = None
 
-        # Params of the model
-        self.params = [self.W, self.b, self.gamma, self.beta]
 
-        self.input = input
+    def logit_layer(self, input, batch_normalize=False):
+        # Compute (symbolic) : softmax(x.W + b)
+        lin_output = T.dot(input, self.tparams[_p(self.prefix, 'W')]) + self.tparams[_p(self.prefix, 'b')]
+
+        # Parameters for batch normalization follow
+        if batch_normalize:
+            # Apply batch normalization to the linear output
+            bn_output = T.nnet.batch_normalization(
+                inputs=lin_output,
+                gamma=self.gamma,
+                beta=self.beta,
+                mean=lin_output.mean((0,), keepdims=True),
+                std=T.ones_like(lin_output.var((0,), keepdims=True)),
+                mode='high_mem'
+            )
+            lin_output = bn_output
+
+        self.lin_output = lin_output
+        return lin_output
+
 
     def loss(self, y):
         """
@@ -136,3 +135,6 @@ class LogisticRegression(object):
             return zero_one_loss(self.y_pred, y)
         else:
             raise NotImplementedError()
+
+def _p(pp, name):
+    return '%s_%s' % (pp, name)

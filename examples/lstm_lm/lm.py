@@ -13,6 +13,7 @@ from theano.sandbox.rng_mrg import MRG_RandomStreams as RandomStreams
 from cutils.numeric import numpy_floatX
 from cutils.layers.utils import dropout_layer
 from cutils.layers.lstm import LSTM
+from cutils.layers.logistic_regression import LogisticRegression
 from cutils.data_interface.utils import pad_and_mask
 from cutils.params.utils import init_tparams
 
@@ -46,21 +47,33 @@ class LSTM_LM(object):
         unpack(word_dict.tparams, self.tparams)
         # Initialize LSTM and add its params
         # Layer 1
-        self.layers['lstm_1'] = LSTM(dim_proj, self.rng, prefix='lstm_1')
+        self.layers['lstm_1'] = LSTM(dim_proj, prefix='lstm_1')
         unpack(self.layers['lstm_1'].params, self.params)
         unpack(self.layers['lstm_1'].tparams, self.tparams)
         # Layer 2
-        self.layers['lstm_2'] = LSTM(dim_proj, self.rng, prefix='lstm_2')
+        self.layers['lstm_2'] = LSTM(dim_proj, prefix='lstm_2')
         unpack(self.layers['lstm_2'].params, self.params)
         unpack(self.layers['lstm_2'].tparams, self.tparams)
-        # Initialize other params
-        other_params = OrderedDict()
-        other_params['U'] = 0.01 * numpy.random.randn(dim_proj, ydim) \
-            .astype(theano.config.floatX)
-        other_params['b'] = numpy.zeros((ydim,)).astype(theano.config.floatX)
-        other_tparams = init_tparams(other_params)
-        unpack(other_params, self.params)
-        unpack(other_tparams, self.tparams)
+        # Logit : hidden state to output
+        self.layers['logit_lstm'] = LogisticRegression(dim_proj, dim_proj, prefix='logit_lstm', ortho=False)
+        unpack(self.layers['logit_lstm'].params, self.params)
+        unpack(self.layers['logit_lstm'].tparams, self.tparams)
+        # Logit : raw input to output
+        self.layers['logit_prev_word'] = LogisticRegression(dim_proj, dim_proj, prefix='logit_prev_word', ortho=False)
+        unpack(self.layers['logit_prev_word'].params, self.params)
+        unpack(self.layers['logit_prev_word'].tparams, self.tparams)
+        # Logit : Softmax
+        self.layers['logit'] = LogisticRegression(ydim, dim_proj, prefix='logit', ortho=False)
+        unpack(self.layers['logit'].params, self.params)
+        unpack(self.layers['logit'].tparams, self.tparams)
+        ## Initialize other params
+        #other_params = OrderedDict()
+        #other_params['U'] = 0.01 * numpy.random.randn(dim_proj, ydim) \
+            #.astype(theano.config.floatX)
+        #other_params['b'] = numpy.zeros((ydim,)).astype(theano.config.floatX)
+        #other_tparams = init_tparams(other_params)
+        #unpack(other_params, self.params)
+        #unpack(other_tparams, self.tparams)
 
 
     def build_model(self):
@@ -89,17 +102,17 @@ class LSTM_LM(object):
         # Note that these contain hidden states for elements which were
         # padded in input. The cost for these time steps are removed
         # before the calculation of the cost.
-        proj_1 = self.layers['lstm_1'].lstm_layer(emb, self.dim_proj, mask=mask,
-                                                  restore_final_to_initial_hidden=True)
+        proj_1 = self.layers['lstm_1'].lstm_layer(emb, mask=mask, restore_final_to_initial_hidden=True)
         # Use dropout on non-recurrent connections (Zaremba et al.)
         if self.use_dropout:
             proj_1 = dropout_layer(proj_1, use_noise, trng)
-        proj = self.layers['lstm_2'].lstm_layer(proj_1, self.dim_proj, mask=mask,
-                                                restore_final_to_initial_hidden=True)
+        proj = self.layers['lstm_2'].lstm_layer(proj_1, mask=mask, restore_final_to_initial_hidden=True)
         if self.use_dropout:
             proj = dropout_layer(proj, use_noise, trng)
 
-        pre_s = T.dot(proj, self.tparams['U']) + self.tparams['b']
+        pre_s_lstm = self.layers['logit_lstm'].logit_layer(proj)
+        pre_s_input = self.layers['logit_prev_word'].logit_layer(emb)
+        pre_s = self.layers['logit'].logit_layer(T.tanh(pre_s_lstm + pre_s_input))
         # Softmax works for 2-tensors (matrices) only. We have a 3-tensor
         # TxNxV. So we reshape it to (T*N)xV, apply softmax and reshape again
         # -1 is a proxy for infer dim based on input (numpy style)
@@ -145,12 +158,14 @@ class LSTM_LM(object):
                                                          x.shape[1],
                                                          self.dim_proj])
 
-        def output_to_input_transform(output):
+        def output_to_input_transform(output, emb):
             """
             output : The previous hidden state (Nxd)
             """
             # N X V
-            pre_soft = T.dot(output, self.tparams['U']) + self.tparams['b']
+            pre_soft_lstm = self.layers['logit_lstm'].logit_layer(output)
+            pre_soft_input = self.layers['logit_prev_word'].logit_layer(emb)
+            pre_soft = self.layers['logit'].logit_layer(T.tanh(pre_s_lstm + pre_s_input))
             pred = T.nnet.softmax(pre_soft)
             # N x 1
             pred_argmax = pred.argmax(axis=1)
@@ -167,7 +182,9 @@ class LSTM_LM(object):
         if self.use_dropout:
             proj = dropout_layer(proj, use_noise, trng)
 
-        pre_s = T.dot(proj, self.tparams['U']) + self.tparams['b']
+        pre_s_lstm = self.layers['logit_lstm'].logit_layer(proj)
+        pre_s_input = self.layers['logit_prev_word'].logit_layer(emb)
+        pre_s = self.layers['logit'].logit_layer(T.tanh(pre_s_lstm + pre_s_input))
         # Softmax works for 2-tensors (matrices) only. We have a 3-tensor
         # TxNxV. So we reshape it to (T*N)xV, apply softmax and reshape again
         # -1 is a proxy for infer dim based on input (numpy style)

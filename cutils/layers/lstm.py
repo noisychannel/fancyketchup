@@ -42,7 +42,7 @@ class LSTM(object):
         self.param_names.append(_p(prefix, 'b'))
 
         # Memory of the last final hidden states
-        # Not archived
+        # TODO:Not archived
         self.h_final = None
 
         self.dim_proj = dim_proj
@@ -132,7 +132,7 @@ class LSTM(object):
                 return _x[:, :, n * dim:(n + 1) * dim]
             return _x[:, n * dim:(n + 1) * dim]
 
-        def _step(t_, h_, c_, mask, state_below):
+        def _step(t_, h_, c_, mask, state_below, state_below_raw):
             """
             m_ is the mask for this timestep (N x 1)
             x_ is the input for this time step (pre-multiplied with the
@@ -175,6 +175,7 @@ class LSTM(object):
 
             return h, c
 
+        state_below_raw = state_below
         state_below = (T.dot(state_below, self.tparams[_p(self.prefix, 'W')]) +
                        self.tparams[_p(self.prefix, 'b')])
         rval, updates = theano.scan(_step,
@@ -183,7 +184,7 @@ class LSTM(object):
                                                   T.alloc(numpy_floatX(0.),
                                                           n_samples,
                                                           self.dim_proj)],
-                                    non_sequences=[mask, state_below],
+                                    non_sequences=[mask, state_below, state_below_raw],
                                     name=_p(self.prefix, '_layers'),
                                     n_steps=nsteps)
         # Save the final state to be used as the next initial hidden state

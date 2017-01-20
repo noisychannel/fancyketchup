@@ -1,6 +1,8 @@
 """
 Training for the LSTM-LM
 """
+#TODO: Model options are not cleanly handled. Mix of direct args and
+#      invocation of model options
 
 from __future__ import print_function
 
@@ -171,6 +173,7 @@ def train_lstm(
                     print("Some sentences.. ")
                     print(ptb_data.dictionary.idx_to_words(lstm_lm.f_decode(decode_sentences, decode_mask, model_options['maxlen'])))
 
+                    # After patience expires, we will not tolerate #patience worse costs and then quit.
                     if (len(history_errs) > patience and valid_cost
                             >= numpy.array(history_errs)[:-patience, 0].min()):
                         bad_counter += 1
